@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtCore import Qt, Signal, QRect, QPoint
-from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon
+from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase
 from PySide6.QtWidgets import (
     QWidget, QApplication, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QMainWindow, 
     QPushButton, QCheckBox, QTextEdit, QScrollArea, QFrame, QGraphicsDropShadowEffect
@@ -10,30 +10,100 @@ from PySide6.QtWidgets import (
 from calculator import ingredienti, find_optimal_combination
 
 class SquareSlider(QWidget):
-    """
-    A discrete slider widget that displays a row of small squares.
-    Users can select a minimum (low) and a maximum (high) index among the cells.
-
-    The widget emits a valueChanged(low, high) signal when the selection changes.
-    Modified to support values from 0 to 10 and reduced square dimensions.
-    """
     valueChanged = Signal(int, int)  # Emits (low, high)
 
     def __init__(self, minimum=0, maximum=10, parent=None):
         super().__init__(parent)
         self._minimum = minimum
         self._maximum = maximum
-        self.num_cells = maximum - minimum + 1  # Supports 0 to 10 inclusive => 11 cells
+        self.num_cells = maximum - minimum + 1
         self._low = minimum
         self._high = maximum
-        self._active_handle = None  # "low" or "high"
         self._cell_margin = 2
         self._cell_spacing = 2
-        self._marker_radius = 4
-        # Set the font to bold
-        self._font = QFont("Arial", 7)
+        self._selection_start = None
+        self._current_cell = None
+        # Set the font to Alegreya bold with increased size
+        self._font = QFont("Alegreya", 9)
         self._font.setBold(True)
         self.setMinimumHeight(40)
+        self.setMouseTracking(True)  # Abilita il tracking del mouse
+
+    def cellRect(self, index):
+        total_width = self.width() - 2 * self._cell_margin
+        total_spacing = self._cell_spacing * (self.num_cells - 1)
+        cell_width = (total_width - total_spacing) / self.num_cells
+        cell_height = self.height() - 2 * self._cell_margin
+        x = self._cell_margin + index * (cell_width + self._cell_spacing)
+        y = self._cell_margin
+        return QRect(int(x), int(y), int(cell_width), int(cell_height))
+
+    def getCellAtPosition(self, pos):
+        for i in range(self.num_cells):
+            if self.cellRect(i).contains(pos):
+                return i
+        return None
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setFont(self._font)
+
+        for i in range(self.num_cells):
+            rect = self.cellRect(i)
+            # Colora le celle nel range selezionato
+            if self._low <= i <= self._high:
+                painter.setBrush(QColor(100, 150, 250))
+            else:
+                painter.setBrush(QColor(200, 200, 200))
+            
+            # Evidenzia la cella su cui si trova il mouse durante la selezione
+            if self._selection_start is not None and i == self._current_cell:
+                painter.setBrush(QColor(150, 200, 250))
+
+            painter.setPen(QPen(Qt.black, 1))
+            painter.drawRect(rect)
+            
+            # Disegna il numero
+            text = f"{i}"
+            metrics = painter.fontMetrics()
+            text_width = metrics.horizontalAdvance(text)
+            text_height = metrics.height()
+            text_x = rect.x() + (rect.width() - text_width) / 2
+            text_y = rect.y() + (rect.height() + text_height) / 2 - 3
+            painter.setPen(QColor("black"))
+            painter.drawText(int(text_x), int(text_y), text)
+
+    def mousePressEvent(self, event):
+        cell = self.getCellAtPosition(event.pos())
+        if cell is not None:
+            self._selection_start = cell
+            self._current_cell = cell
+            self._low = cell
+            self._high = cell
+            self.valueChanged.emit(self._low, self._high)
+            self.update()
+
+    def mouseMoveEvent(self, event):
+        if self._selection_start is not None:
+            cell = self.getCellAtPosition(event.pos())
+            if cell is not None and cell != self._current_cell:
+                self._current_cell = cell
+                # Aggiorna il range in base alla direzione della selezione
+                if cell < self._selection_start:
+                    self._low = cell
+                    self._high = self._selection_start
+                else:
+                    self._low = self._selection_start
+                    self._high = cell
+                self.valueChanged.emit(self._low, self._high)
+                self.update()
+
+    def mouseReleaseEvent(self, event):
+        if self._selection_start is not None:
+            self._selection_start = None
+            self._current_cell = None
+            self.update()
 
     def minimum(self):
         return self._minimum
@@ -48,108 +118,25 @@ class SquareSlider(QWidget):
         return self._high
 
     def setLow(self, value):
-        if value < self._minimum:
-            value = self._minimum
-        if value > self._high:
-            value = self._high
-        if self._low != value:
+        if self._minimum <= value <= self._high:
             self._low = value
             self.valueChanged.emit(self._low, self._high)
             self.update()
 
     def setHigh(self, value):
-        if value > self._maximum:
-            value = self._maximum
-        if value < self._low:
-            value = self._low
-        if self._high != value:
+        if self._low <= value <= self._maximum:
             self._high = value
             self.valueChanged.emit(self._low, self._high)
             self.update()
 
     def setLowHigh(self, low, high):
-        if low < self._minimum:
-            low = self._minimum
-        if high > self._maximum:
-            high = self._maximum
         if low > high:
             low, high = high, low
-        self._low = low
-        self._high = high
-        self.valueChanged.emit(self._low, self._high)
-        self.update()
-
-    def cellRect(self, index):
-        total_width = self.width() - 2 * self._cell_margin
-        total_spacing = self._cell_spacing * (self.num_cells - 1)
-        cell_width = (total_width - total_spacing) / self.num_cells
-        cell_height = self.height() - 2 * self._cell_margin
-        x = self._cell_margin + index * (cell_width + self._cell_spacing)
-        y = self._cell_margin
-        return QRect(int(x), int(y), int(cell_width), int(cell_height))
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setFont(self._font)
-
-        for i in range(self.num_cells):
-            rect = self.cellRect(i)
-            if self._low <= i <= self._high:
-                painter.setBrush(QColor(100, 150, 250))
-            else:
-                painter.setBrush(QColor(200, 200, 200))
-            painter.setPen(QPen(Qt.black, 1))
-            painter.drawRect(rect)
-            text = f"{i}"
-            metrics = painter.fontMetrics()
-            text_width = metrics.horizontalAdvance(text)
-            text_height = metrics.height()
-            text_x = rect.x() + (rect.width() - text_width) / 2
-            text_y = rect.y() + (rect.height() + text_height) / 2 - 3
-            painter.setPen(QColor("black"))
-            painter.drawText(int(text_x), int(text_y), text)
-
-        low_rect = self.cellRect(self._low)
-        high_rect = self.cellRect(self._high)
-        low_center = low_rect.center()
-        high_center = high_rect.center()
-        painter.setBrush(QColor(80, 80, 230))
-        painter.setPen(QPen(Qt.black, 1))
-        painter.drawEllipse(low_center, self._marker_radius, self._marker_radius)
-        painter.setBrush(QColor(230, 80, 80))
-        painter.drawEllipse(high_center, self._marker_radius, self._marker_radius)
-
-    def mousePressEvent(self, event):
-        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
-        low_center = self.cellRect(self._low).center()
-        high_center = self.cellRect(self._high).center()
-        dist_to_low = (pos - low_center).manhattanLength()
-        dist_to_high = (pos - high_center).manhattanLength()
-        if dist_to_low <= dist_to_high:
-            self._active_handle = "low"
-        else:
-            self._active_handle = "high"
-        self.updateHandleFromPosition(pos)
-
-    def mouseMoveEvent(self, event):
-        if self._active_handle is not None:
-            pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
-            self.updateHandleFromPosition(pos)
-
-    def mouseReleaseEvent(self, event):
-        self._active_handle = None
-
-    def updateHandleFromPosition(self, pos):
-        for i in range(self.num_cells):
-            rect = self.cellRect(i)
-            if rect.contains(pos):
-                if self._active_handle == "low":
-                    self.setLow(i)
-                elif self._active_handle == "high":
-                    self.setHigh(i)
-                break
-
+        if self._minimum <= low and high <= self._maximum:
+            self._low = low
+            self._high = high
+            self.valueChanged.emit(self._low, self._high)
+            self.update()
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -173,16 +160,20 @@ class MainWindow(QMainWindow):
 
         header = QLabel("Ale-Abbey Beer Tycoon Calculator", self)
         header.setAlignment(Qt.AlignCenter)
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
+        header.setStyleSheet("""
+            font-size: 28px;
+            font-family: Alegreya;
+            font-weight: bold;
+            color: white;
+        """)
         main_layout.addWidget(header)
 
         # Ingredients selection using a grid layout (5 items per column).
         ingredients_frame = QFrame(self)
         ingredients_frame.setFrameShape(QFrame.StyledPanel)
-        # Translucent dark background for the widget.
         ingredients_frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(30, 30, 180, 180);
+                background-color: rgba(30, 30, 30, 180);
                 border-radius: 10px;
             }
         """)
@@ -194,12 +185,17 @@ class MainWindow(QMainWindow):
         ingredients_frame.setGraphicsEffect(ingredients_shadow)
 
         ingredients_layout = QVBoxLayout(ingredients_frame)
-        # Title label for ingredients with a fixed background.
         ingredients_label = QLabel("Ingredienti obbligatori:", self)
         ingredients_label.setAlignment(Qt.AlignLeft)
-        ingredients_label.setStyleSheet(
-            "color: white; background-color: #4F4F4F; font-weight: bold; border-radius: 5px; padding: 2px;"
-        )
+        ingredients_label.setStyleSheet("""
+            color: white;
+            background-color: #4F4F4F;
+            font-family: Alegreya;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            padding: 2px;
+        """)
         ingredients_layout.addWidget(ingredients_label)
 
         scroll_area = QScrollArea(self)
@@ -211,7 +207,12 @@ class MainWindow(QMainWindow):
         grid_layout.setVerticalSpacing(5)
         for index, ingr in enumerate(ingredienti):
             cb = QCheckBox(ingr, self)
-            cb.setStyleSheet("color: white; font-weight: bold;")
+            cb.setStyleSheet("""
+                color: white;
+                font-family: Alegreya;
+                font-size: 12px;
+                font-weight: bold;
+            """)
             row = index % 5
             col = index // 5
             grid_layout.addWidget(cb, row, col)
@@ -227,7 +228,6 @@ class MainWindow(QMainWindow):
         for param in self.parameters:
             param_frame = QFrame(self)
             param_frame.setFrameShape(QFrame.StyledPanel)
-            # Translucent dark background for the widget.
             param_frame.setStyleSheet("""
                 QFrame {
                     background-color: rgba(30, 30, 30, 180);
@@ -243,18 +243,29 @@ class MainWindow(QMainWindow):
 
             param_layout = QVBoxLayout(param_frame)
             title_layout = QHBoxLayout()
-            # Title label for slider with a fixed background.
             title_label = QLabel(f"Range {param.capitalize()}:", self)
             title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            title_label.setStyleSheet(
-                "color: white; background-color: #4F4F4F; font-weight: bold; border-radius: 5px; padding: 2px;"
-            )
+            title_label.setStyleSheet("""
+                color: white;
+                background-color: #4F4F4F;
+                font-family: Alegreya;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 2px;
+            """)
             title_layout.addWidget(title_label)
             range_label = QLabel("min 0 - max 10", self)
             range_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            range_label.setStyleSheet(
-                "font-weight: bold; color: white; background-color: #4F4F4F; border-radius: 5px; padding: 2px;"
-            )
+            range_label.setStyleSheet("""
+                color: white;
+                background-color: #4F4F4F;
+                font-family: Alegreya;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 2px;
+            """)
             title_layout.addWidget(range_label)
             self.param_labels[param] = range_label
             param_layout.addLayout(title_layout)
@@ -271,7 +282,8 @@ class MainWindow(QMainWindow):
         self.compute_button.setIcon(icon)
         self.compute_button.setStyleSheet("""
             QPushButton {
-                font-size: 16px;
+                font-size: 18px;
+                font-family: Alegreya;
                 padding: 8px;
                 background-color: rgba(30, 30, 30, 180);
                 color: white;
@@ -291,7 +303,7 @@ class MainWindow(QMainWindow):
         self.compute_button.clicked.connect(self.compute_combination)
         main_layout.addWidget(self.compute_button)
 
-        # Result text box now uses the same translucent background as the widgets.
+        # Result text box
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
         self.result_text.setStyleSheet("""
@@ -300,6 +312,8 @@ class MainWindow(QMainWindow):
                 color: white;
                 border-radius: 10px;
                 padding: 8px;
+                font-family: Alegreya;
+                font-size: 14px;
                 font-weight: bold;
             }
         """)
@@ -345,11 +359,30 @@ class MainWindow(QMainWindow):
             result = f"No valid combination found.\nCombinations Examined: {counter}\n"
         self.result_text.setPlainText(result)
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Set a global bold font for the entire application.
-    global_font = QFont("Arial", 10, QFont.Bold)
+    
+    # Load Alegreya font
+    font_id = QFontDatabase.addApplicationFont("fonts/Alegreya-Regular.ttf")
+    font_id_bold = QFontDatabase.addApplicationFont("fonts/Alegreya-Bold.ttf")
+    
+    if font_id == -1 or font_id_bold == -1:
+        print("Warning: Could not load Alegreya font. Falling back to system font.")
+    
+    # Set global bold font for the entire application
+    global_font = QFont("Alegreya", 12)
+    global_font.setBold(True)
     app.setFont(global_font)
+    
+    # Set global style for the application
+    app.setStyleSheet("""
+        * {
+            font-family: Alegreya;
+            font-weight: bold;
+        }
+    """)
+    
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
