@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from math import cos, sin, pi
 
 # Import calculator functions and data from calculator.py
-from calculator import ingredienti, UNLOCKABLE_INGREDIENTS, find_optimal_combination, ALWAYS_AVAILABLE
+from calculator import ingredienti, INGREDIENTI_ORDINE_SBLOCCO, UNLOCKABLE_INGREDIENTS, find_optimal_combination, ALWAYS_AVAILABLE
 
 class SpinningLoader(QWidget):
     def __init__(self, parent=None, size=32, color=QColor(74, 158, 255)):
@@ -337,10 +337,10 @@ class MainWindow(QMainWindow):
         self.required_checkboxes = {}
 
         # Calcoliamo il punto medio della lista ingredienti
-        mid_point = len(ingredienti) // 2
+        mid_point = len(INGREDIENTI_ORDINE_SBLOCCO) // 2
         
         # Creazione delle righe per ogni ingrediente, dividendo tra colonna sinistra e destra
-        for i, ingr in enumerate(ingredienti):
+        for i, ingr in enumerate(INGREDIENTI_ORDINE_SBLOCCO):
             row_layout = QHBoxLayout()
             row_layout.setSpacing(0)
             row_layout.setContentsMargins(0, 0, 0, 0)
@@ -573,45 +573,61 @@ class MainWindow(QMainWindow):
     def on_calculation_complete(self, result):
         self.spinner.stop()
         self.loading_widget.hide()
-        
-        quantities, values, counter = result
-        
+    
+        quantities, values, stats = result  # Modifica: ora result contiene stats invece di counter
+    
         if quantities:
             result_text = "✅ Combinazione ottimale trovata!\n\n"
+            # Aggiungiamo il tempo di esecuzione in evidenza
+            result_text += f"⏱️ Tempo impiegato: {stats['execution_time']:.2f} secondi\n\n"
+        
             result_text += "Ingredienti da utilizzare:\n"
             result_text += "-" * 30 + "\n"
             for ingr, qty in zip(ingredienti, quantities):
                 if qty > 0:
                     result_text += f"{ingr}: {qty} unità\n"
-            
+        
             result_text += "\nValori ottenuti:\n"
             result_text += "-" * 30 + "\n"
             for key, val in values.items():
                 result_text += f"{key.capitalize()}: {val:.1f}\n"
-            
-            result_text += f"\nCombinazioni esaminate: {counter:,}\n"
+        
+            # Aggiungiamo le statistiche dettagliate
+            result_text += "\nStatistiche della ricerca:\n"
+            result_text += "-" * 30 + "\n"
+            result_text += f"Combinazioni teoriche: {stats['total_combinations']:,}\n"
+            result_text += f"Combinazioni esaminate: {stats['examined_combinations']:,}\n"
+            result_text += f"Scartate per limite totale > 25: {stats['skipped_total']:,}\n"
+            result_text += f"Scartate per ingredienti obbligatori: {stats['skipped_required']:,}\n"
+            result_text += f"Scartate per valori fuori range: {stats['skipped_range']:,}\n"
+            result_text += f"Combinazioni valide: {stats['valid_combinations']:,}\n"
         else:
             result_text = "❌ Nessuna combinazione valida trovata!\n\n"
+            result_text += f"⏱️ Tempo di ricerca: {stats['execution_time']:.2f} secondi\n"
             result_text += "Possibili cause:\n"
             result_text += "-" * 30 + "\n"
             result_text += "• Range dei valori troppo restrittivo\n"
             result_text += "• Troppi ingredienti obbligatori selezionati\n"
             result_text += "• Combinazione di requisiti impossibile da soddisfare\n"
             result_text += "• Ingredienti necessari non ancora sbloccati\n\n"
-            
+        
             if self.worker.required_ingredients:
                 result_text += "Ingredienti obbligatori selezionati:\n"
                 result_text += "-" * 30 + "\n"
                 for idx in self.worker.required_ingredients:
                     result_text += f"• {ingredienti[idx]}\n"
-            
+        
             result_text += "\nRange richiesti:\n"
             result_text += "-" * 30 + "\n"
             for param in self.parameters:
                 low, high = self.worker.ranges[param]
                 result_text += f"• {param.capitalize()}: {low} - {high}\n"
-            
-            result_text += f"\nCombinazioni esaminate: {counter:,}\n"
+        
+            # Aggiungiamo le statistiche anche in caso di fallimento
+            result_text += "\nStatistiche della ricerca:\n"
+            result_text += "-" * 30 + "\n"
+            result_text += f"Combinazioni teoriche: {stats['total_combinations']:,}\n"
+            result_text += f"Combinazioni esaminate: {stats['examined_combinations']:,}\n"
 
         self.result_text.setPlainText(result_text)
         self.compute_button.setEnabled(True)
