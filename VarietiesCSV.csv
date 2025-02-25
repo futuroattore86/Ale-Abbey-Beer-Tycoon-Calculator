@@ -1,0 +1,33 @@
+Variety,Flavor,Strength,Color,Foam,Min Quality Modifier,Max Quality Modifier,Cost/Unit Low,Cost/Unit Normal,Cost/Unit High,Adjunct,Gourmet Probability Bonus/Unit,Popularity Probability Bonus/Unit,Generic Probability Bonus/Unit,Trait 1,Probability,Trait 2,Probability,Trait 3,Probability,Shelf Life,Brewing time
+Pale Malt,4,10,3,5,0,0,1,2,3,FALSE,0,0,3,,,,,,,0,0
+Amber Malt,8,5,12,8,0,1,2,4,6,FALSE,3,2,0,ChromaticDelight,10,,,,,0,0
+Brown Malt,16,0,20,0,0,0,3,6,8,FALSE,2,0,2,Vintage,5,,,,,0,0
+Wheat Malt,8,4,-3,20,0,0,2,4,6,FALSE,0,0,3,FullBodied,5,Spiced,5,,,0,10
+Rye Malt,20,-5,10,15,0,1,1,3,5,FALSE,0,4,0,ChromaticDelight,5,,,,,0,0
+Roasted Malt,10,-10,30,5,0,0,4,8,12,FALSE,3,3,4,Vintage,10,,,,,0,0
+Smoked Malt,25,5,5,5,0,0,3,4,8,FALSE,0,5,0,Smoked,50,,,,,0,0
+Sugar,-10,20,-5,-10,0,0,1,2,3,TRUE,0,0,3,,,,,,,0,-10
+Brown Candied Sugar,5,15,10,-5,0,2,3,6,9,FALSE,3,0,4,,,,,,,0,0
+Honey,10,10,3,0,0,1,2,4,6,FALSE,2,2,4,,,,,,,0,0
+Berries,20,5,20,5,0,0,2,6,6,FALSE,4,4,4,Fruity,15,,,,,0,0
+Grapes,15,5,10,5,0,0,1,2,3,FALSE,2,2,2,Fruity,5,,,,,0,0
+Cherries,15,5,15,0,0,0,2,4,6,FALSE,3,3,3,Fruity,10,,,,,0,0
+Standard Yeast,5,-10,0,-5,0,0,1,2,3,FALSE,0,0,0,,,,,,,0,0
+Lager Yeast,-5,0,-5,0,0,0,2,4,6,FALSE,1,0,2,,,,,,,0,+10
+Estery Yeast,15,-10,0,0,0,0,2,4,8,FALSE,4,0,0,Spiced,5,EstersBomb,20,,,0,0
+Strong Yeast,3,20,0,5,0,2,2,4,8,FALSE,0,3,2,EstersBomb,5,,,,,672,-10
+Wild Yeast,15,5,0,10,0,0,1,6,10,FALSE,4,4,4,EstersBomb,15,,,,,0,0
+Classic Hops,8,0,0,5,0,0,2,4,6,FALSE,2,0,2,,,,,,,1344,0
+Cascadus Hops,12,0,0,5,0,2,3,6,9,FALSE,2,4,0,Spiced,15,,,,,2016,0
+Magnum Hops,16,0,0,10,0,1,4,8,12,FALSE,0,6,0,Spiced,25,Spiced,5,,,2688,0
+Gruit,5,0,-3,0,0,0,1,2,3,FALSE,2,0,0,,,,,,,672,0
+Eucaliptus,10,-2,0,-5,0,0,1,2,3,FALSE,4,0,0,,,,,,,672,0
+Coriander Seeds,15,0,0,0,0,0,2,4,6,FALSE,2,3,2,Spiced,20,,,,,0,0
+Orange Peel,10,0,0,0,0,2,3,6,9,FALSE,5,5,2,Spiced,10,Fruity,5,,,0,0
+Coffee,10,0,20,0,0,1,2,4,6,FALSE,0,4,0,,,,,,,0,0
+Pepper,10,0,0,-10,0,3,2,4,7,FALSE,4,0,0,Spiced,30,,,,,0,0
+Pumpkin,15,0,10,-10,0,2,3,6,8,FALSE,3,3,0,ChromaticDelight,5,FullBodied,10,,,0,0
+Wheat Starch,-5,-10,0,15,0,0,1,2,4,TRUE,0,0,5,FullBodied,5,,,,,0,0
+Corn Flakes,-10,0,-10,0,0,0,1,2,4,TRUE,0,0,3,,,,,,,0,0
+Yeast Nutritionals,0,10,0,0,0,1,1,6,4,TRUE,5,0,2,,,,,,,0,-15
+Unmalted Wheat,5,2,-10,20,0,0,2,4,6,TRUE,4,0,4,,,,,,,0,0
