@@ -64,13 +64,16 @@ def calculate_values(quantities):
 
 def calculate_score(values, ranges):
     """
-    Calcola un punteggio basato sulla distanza dai valori target
+    Calcola un punteggio basato sulla validità dei valori nel range
     Un punteggio più alto indica una combinazione migliore
     """
     score = 0
     for param in ['gusto', 'colore', 'gradazione', 'schiuma']:
-        target = (ranges[param][0] + ranges[param][1]) / 2
-        score -= abs(values[param] - target)
+        # Se il valore è nel range, aggiungi un bonus
+        if ranges[param][0] <= values[param] <= ranges[param][1] + 0.99:
+            score += 10  # Bonus per essere nel range
+            # Bonus aggiuntivo per valori più alti (ma ancora nel range)
+            score += values[param] / (ranges[param][1] + 0.99)
     return score
 
 def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients):
