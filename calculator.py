@@ -64,16 +64,59 @@ def calculate_values(quantities):
 
 def calculate_score(values, ranges):
     """
-    Calcola un punteggio basato sulla validità dei valori nel range
-    Un punteggio più alto indica una combinazione migliore
+    Calcola un punteggio basato sulla validità dei valori nel range,
+    con forte enfasi sui valori alti e sul bilanciamento
     """
     score = 0
+    # Pesi modificati per dare più importanza a gusto e gradazione
+    weights = {
+        'gusto': 1.3,      # Gusto molto importante
+        'colore': 0.7,     # Colore meno critico
+        'gradazione': 1.2,  # Gradazione molto importante
+        'schiuma': 0.8     # Schiuma meno critica
+    }
+    
+    # Teniamo traccia dei valori normalizzati per il calcolo del bilanciamento
+    normalized_values = {}
+    
     for param in ['gusto', 'colore', 'gradazione', 'schiuma']:
-        # Se il valore è nel range, aggiungi un bonus
-        if ranges[param][0] <= values[param] <= ranges[param][1] + 0.99:
-            score += 10  # Bonus per essere nel range
-            # Bonus aggiuntivo per valori più alti (ma ancora nel range)
-            score += values[param] / (ranges[param][1] + 0.99)
+        max_value = ranges[param][1] + 0.99
+        
+        if ranges[param][0] <= values[param] <= max_value:
+            # Bonus base per essere nel range
+            score += 8 * weights[param]
+            
+            # Normalizzazione del valore rispetto al massimo possibile
+            normalized_value = values[param] / max_value
+            normalized_values[param] = normalized_value
+            
+            # Bonus progressivo per vicinanza al massimo
+            # Più ci si avvicina al massimo, più il bonus cresce esponenzialmente
+            proximity_to_max = normalized_value ** 1.5  # Esponente 1.5 per crescita non lineare
+            score += proximity_to_max * 10 * weights[param]
+            
+            # Bonus extra per valori molto alti (90-99% del massimo)
+            if 0.90 * max_value <= values[param] <= 0.99 * max_value:
+                score += 3 * weights[param]
+    
+    # Bonus bilanciamento migliorato
+    values_list = list(normalized_values.values())
+    max_gap = max(values_list) - min(values_list)
+    
+    # Bonus inversamente proporzionale al gap tra valori
+    if max_gap < 0.1:  # Gap minimo (valori molto bilanciati)
+        score += 8
+    elif max_gap < 0.2:
+        score += 6
+    elif max_gap < 0.3:
+        score += 4
+    elif max_gap < 0.4:
+        score += 2
+    
+    # Bonus extra se tutti i valori sono sopra l'80% del loro massimo
+    if all(v >= 0.8 for v in normalized_values.values()):
+        score += 5
+    
     return score
 
 def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients):
