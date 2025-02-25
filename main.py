@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from math import cos, sin, pi
 
 # Import calculator functions and data from calculator.py
-from calculator import ingredienti, find_optimal_combination
+from calculator import ingredienti, UNLOCKABLE_INGREDIENTS, find_optimal_combination
 
 class SpinningLoader(QWidget):
     def __init__(self, parent=None, size=32, color=QColor(74, 158, 255)):
@@ -61,13 +61,14 @@ class SpinningLoader(QWidget):
 class CalculationWorker(QThread):
     finished = Signal(tuple)
     
-    def __init__(self, required_ingredients, ranges):
+    def __init__(self, required_ingredients, ranges, unlocked_ingredients):
         super().__init__()
         self.required_ingredients = required_ingredients
         self.ranges = ranges
+        self.unlocked_ingredients = unlocked_ingredients
         
     def run(self):
-        result = find_optimal_combination(self.required_ingredients, self.ranges)
+        result = find_optimal_combination(self.required_ingredients, self.ranges, self.unlocked_ingredients)
         self.finished.emit(result)
 
 class SquareSlider(QWidget):
@@ -223,6 +224,7 @@ class MainWindow(QMainWindow):
         """)
         main_layout.addWidget(header)
 
+        # Ingredients selection section
         ingredients_frame = QFrame(self)
         ingredients_frame.setFrameShape(QFrame.StyledPanel)
         ingredients_frame.setStyleSheet("""
@@ -261,6 +263,8 @@ class MainWindow(QMainWindow):
         grid_layout = QGridLayout(ing_widget)
         grid_layout.setHorizontalSpacing(5)
         grid_layout.setVerticalSpacing(5)
+        
+        # Checkbox per gli ingredienti obbligatori
         for index, ingr in enumerate(ingredienti):
             cb = QCheckBox(ingr, self)
             cb.setStyleSheet("""
@@ -272,11 +276,72 @@ class MainWindow(QMainWindow):
             row = index % 5
             col = index // 5
             grid_layout.addWidget(cb, row, col)
+            
         ing_widget.setLayout(grid_layout)
         scroll_area.setWidget(ing_widget)
         ingredients_layout.addWidget(scroll_area)
         main_layout.addWidget(ingredients_frame)
 
+        # Sezione ingredienti sbloccati
+        unlocked_frame = QFrame(self)
+        unlocked_frame.setFrameShape(QFrame.StyledPanel)
+        unlocked_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgba(30, 30, 30, 180);
+                border-radius: 10px;
+            }
+            QLabel {
+                background: none;
+                background-color: transparent;
+            }
+        """)
+        unlocked_shadow = QGraphicsDropShadowEffect()
+        unlocked_shadow.setBlurRadius(15)
+        unlocked_shadow.setXOffset(3)
+        unlocked_shadow.setYOffset(3)
+        unlocked_shadow.setColor(QColor(0, 0, 0, 160))
+        unlocked_frame.setGraphicsEffect(unlocked_shadow)
+
+        unlocked_layout = QVBoxLayout(unlocked_frame)
+        unlocked_label = QLabel("Ingredienti Sbloccati:", self)
+        unlocked_label.setAlignment(Qt.AlignLeft)
+        unlocked_label.setStyleSheet("""
+            color: white;
+            font-family: Alegreya;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 2px;
+        """)
+        unlocked_layout.addWidget(unlocked_label)
+
+        unlocked_scroll = QScrollArea(self)
+        unlocked_scroll.setWidgetResizable(True)
+        unlocked_scroll.setMinimumHeight(150)
+        unlocked_widget = QWidget(self)
+        unlocked_grid = QGridLayout(unlocked_widget)
+        unlocked_grid.setHorizontalSpacing(5)
+        unlocked_grid.setVerticalSpacing(5)
+        
+        # Checkbox solo per gli ingredienti sbloccabili
+        self.unlocked_checkboxes = []
+        for index, ingr in enumerate(UNLOCKABLE_INGREDIENTS):
+            cb = QCheckBox(ingr, self)
+            cb.setStyleSheet("""
+                color: white;
+                font-family: Alegreya;
+                font-size: 12px;
+                font-weight: bold;
+            """)
+            row = index % 5
+            col = index // 5
+            unlocked_grid.addWidget(cb, row, col)
+            self.unlocked_checkboxes.append(cb)
+            
+        unlocked_widget.setLayout(unlocked_grid)
+        unlocked_scroll.setWidget(unlocked_widget)
+        unlocked_layout.addWidget(unlocked_scroll)
+        main_layout.addWidget(unlocked_frame)
+        # Parameters section
         self.parameters = ["gusto", "colore", "gradazione", "schiuma"]
         self.sliders = {}
         self.param_labels = {}
@@ -331,6 +396,7 @@ class MainWindow(QMainWindow):
             self.sliders[param] = slider
             main_layout.addWidget(param_frame)
 
+        # Compute button and results section
         self.compute_button = QPushButton("Trova Ricetta", self)
         icon = QIcon("search_icon.png")
         self.compute_button.setIcon(icon)
@@ -415,6 +481,9 @@ class MainWindow(QMainWindow):
         self.spinner.start()
         
         required_ingredients = []
+        unlocked_ingredients = []
+        
+        # Raccogli gli ingredienti richiesti
         scroll_area = self.findChild(QScrollArea)
         if scroll_area:
             widget = scroll_area.widget()
@@ -423,13 +492,19 @@ class MainWindow(QMainWindow):
                 for i, cb in enumerate(checkboxes):
                     if cb.isChecked():
                         required_ingredients.append(i)
+        
+        # Raccogli gli ingredienti sbloccati
+        for i, cb in enumerate(self.unlocked_checkboxes):
+            if cb.isChecked():
+                full_index = ingredienti.index(UNLOCKABLE_INGREDIENTS[i])
+                unlocked_ingredients.append(full_index)
 
         ranges = {}
         for param in self.parameters:
             slider = self.sliders[param]
             ranges[param] = (slider.low(), slider.high())
 
-        self.worker = CalculationWorker(required_ingredients, ranges)
+        self.worker = CalculationWorker(required_ingredients, ranges, unlocked_ingredients)
         self.worker.finished.connect(self.on_calculation_complete)
         self.worker.start()
 
@@ -459,7 +534,8 @@ class MainWindow(QMainWindow):
             result_text += "-" * 30 + "\n"
             result_text += "• Range dei valori troppo restrittivo\n"
             result_text += "• Troppi ingredienti obbligatori selezionati\n"
-            result_text += "• Combinazione di requisiti impossibile da soddisfare\n\n"
+            result_text += "• Combinazione di requisiti impossibile da soddisfare\n"
+            result_text += "• Ingredienti necessari non ancora sbloccati\n\n"
             
             if self.worker.required_ingredients:
                 result_text += "Ingredienti obbligatori selezionati:\n"
