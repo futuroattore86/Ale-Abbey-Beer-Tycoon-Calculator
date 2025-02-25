@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtCore import Qt, Signal, QRect, QPoint, QThread, QTimer
-from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase
+from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase, QPainterPath
 from PySide6.QtWidgets import (
     QWidget, QApplication, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QMainWindow, 
     QPushButton, QCheckBox, QTextEdit, QScrollArea, QFrame, QGraphicsDropShadowEffect
@@ -89,6 +89,7 @@ class SquareSlider(QWidget):
         self._font.setBold(True)
         self.setMinimumHeight(45)
         self.setMouseTracking(True)
+
     def cellRect(self, index):
         total_width = self.width() - 2 * self._cell_margin
         total_spacing = self._cell_spacing * (self.num_cells - 1)
@@ -193,12 +194,59 @@ class SquareSlider(QWidget):
             self._high = high
             self.valueChanged.emit(self._low, self._high)
             self.update()
+class OutlinedLabel(QLabel):
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.outline_color = QColor("#000000")  # Colore del contorno (nero)
+        self.text_color = QColor("#FFD700")     # Colore del testo (oro)
+        self.outline_thickness = 3               # Spessore del contorno
+        self.setContentsMargins(10, 5, 10, 5)
+        
+    def setOutlineColor(self, color):
+        self.outline_color = QColor(color)
+        self.update()
+        
+    def setTextColor(self, color):
+        self.text_color = QColor(color)
+        self.update()
+        
+    def setOutlineThickness(self, thickness):
+        self.outline_thickness = thickness
+        self.update()
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
 
+        pen = QPen(self.outline_color)
+        pen.setWidth(self.outline_thickness)
+        painter.setPen(pen)
+        
+        margins = self.contentsMargins()
+        
+        path = QPainterPath()
+        metrics = painter.fontMetrics()
+        descent = metrics.descent()
+        
+        textHeight = metrics.height()
+        y = (self.height() + textHeight - descent) / 2
+        path.addText(0, y, self.font(), self.text())
+        
+        # Centra il testo nel widget
+        bounds = path.boundingRect()
+        xOffset = (self.width() - margins.left() - margins.right() - bounds.width()) / 2
+        yOffset = -bounds.y() / 2
+        
+        painter.translate(xOffset, yOffset)
+        
+        painter.strokePath(path, pen)
+        painter.setPen(self.text_color)
+        painter.fillPath(path, self.text_color)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ale Abbey Monastery Brewery Tycoon Calculator")
-        self.resize(800, 900)
+        self.resize(1200, 800)  # Modificata la dimensione della finestra
 
         self.setStyleSheet("""
             QMainWindow {
@@ -214,15 +262,15 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        header = QLabel("Ale Abbey Monastery Brewery Tycoon Calculator", self)
-        header.setAlignment(Qt.AlignCenter)
-        header.setStyleSheet("""
-            font-size: 28px;
-            font-family: Alegreya;
-            font-weight: bold;
-            color: white;
-        """)
-        main_layout.addWidget(header)
+        # Nuovo codice per il titolo con outline
+        title_label = OutlinedLabel(" Ale Abbey Monastery Brewery Tycoon Calculator", self)
+        title_label.setFont(QFont("Alegreya", 28, QFont.Bold))
+        title_label.setMinimumHeight(70)
+        title_label.setTextColor(QColor("#FFD700"))  # Oro
+        title_label.setOutlineColor(QColor("#000000"))  # Nero
+        title_label.setOutlineThickness(3)
+        main_layout.setContentsMargins(10, 20, 10, 10)
+        main_layout.addWidget(title_label, alignment=Qt.AlignCenter)
 
         # Frame principale per la sezione ingredienti
         ingredients_frame = QFrame(self)
@@ -258,8 +306,8 @@ class MainWindow(QMainWindow):
 
         # Header delle colonne
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(5, 5, 5, 5)  # Imposta margini uniformi
-        header_layout.setSpacing(0)  # Rimuove lo spacing tra gli elementi
+        header_layout.setContentsMargins(5, 5, 5, 5)
+        header_layout.setSpacing(0)
         
         # Header colonna sinistra
         left_header = QHBoxLayout()
@@ -282,7 +330,6 @@ class MainWindow(QMainWindow):
         right_header.addWidget(QLabel("Obbligatorio", self), stretch=1)
         
         # Aggiunta degli header al layout principale
-        # Creiamo il separatore verticale per l'header
         header_separator = QFrame()
         header_separator.setFrameShape(QFrame.VLine)
         header_separator.setFrameShadow(QFrame.Sunken)
@@ -294,9 +341,9 @@ class MainWindow(QMainWindow):
         """)
         
         header_layout.addLayout(left_header)
-        header_layout.addSpacing(10)  # Aggiungi spazio prima del separatore
+        header_layout.addSpacing(10)
         header_layout.addWidget(header_separator)
-        header_layout.addSpacing(5)  # Aggiungi spazio dopo il separatore
+        header_layout.addSpacing(5)
         header_layout.addLayout(right_header)
         
         # Stile per le label degli header
@@ -311,22 +358,26 @@ class MainWindow(QMainWindow):
                 """)
                 
         ingredients_layout.addLayout(header_layout)
-
-        # Area scrollabile per gli ingredienti
+                # Area scrollabile per gli ingredienti
         scroll_area = QScrollArea(self)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumHeight(150)
+        scroll_area.setMinimumHeight(300)
         scroll_area.setStyleSheet("""
             QScrollArea {
                 border: none;
                 background-color: transparent;
             }
+            QScrollArea QScrollBar {
+                width: 0px;
+                height: 0px;
+                background: transparent;
+            }
         """)
         # Widget per la lista degli ingredienti
         ing_widget = QWidget()
-        list_layout = QHBoxLayout(ing_widget)  # Cambiato in QHBoxLayout per le due colonne
-        list_layout.setContentsMargins(5, 5, 5, 5)  # Imposta gli stessi margini dell'header
-        list_layout.setSpacing(0)  # Rimuove lo spacing tra gli elementi
+        list_layout = QHBoxLayout(ing_widget)
+        list_layout.setContentsMargins(5, 5, 5, 5)
+        list_layout.setSpacing(0)
         
         # Creiamo due colonne
         left_column = QVBoxLayout()
@@ -339,13 +390,12 @@ class MainWindow(QMainWindow):
         # Calcoliamo il punto medio della lista ingredienti
         mid_point = len(INGREDIENTI_ORDINE_SBLOCCO) // 2
         
-        # Creazione delle righe per ogni ingrediente, dividendo tra colonna sinistra e destra
+        # Creazione delle righe per ogni ingrediente
         for i, ingr in enumerate(INGREDIENTI_ORDINE_SBLOCCO):
             row_layout = QHBoxLayout()
             row_layout.setSpacing(0)
             row_layout.setContentsMargins(0, 0, 0, 0)
             
-            # Label ingrediente
             ingr_label = QLabel(ingr, self)
             ingr_label.setStyleSheet("""
                 color: white;
@@ -353,10 +403,9 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 font-weight: bold;
             """)
-            ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Allineamento esplicito
-            row_layout.addWidget(ingr_label, stretch=3, alignment=Qt.AlignLeft)  # Allineamento nel layout
+            ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            row_layout.addWidget(ingr_label, stretch=3, alignment=Qt.AlignLeft)
 
-            # Checkbox "Sbloccato"
             unlocked_cb = QCheckBox(self)
             unlocked_cb.setStyleSheet("""
                 QCheckBox {
@@ -372,7 +421,6 @@ class MainWindow(QMainWindow):
             self.unlocked_checkboxes[ingr] = unlocked_cb
             row_layout.addWidget(unlocked_cb, stretch=1, alignment=Qt.AlignCenter)
 
-            # Checkbox "Obbligatorio"
             required_cb = QCheckBox(self)
             required_cb.setStyleSheet("""
                 QCheckBox {
@@ -385,13 +433,11 @@ class MainWindow(QMainWindow):
             self.required_checkboxes[ingr] = required_cb
             row_layout.addWidget(required_cb, stretch=1, alignment=Qt.AlignCenter)
 
-            # Aggiungi alla colonna appropriata
             if i < mid_point:
                 left_column.addLayout(row_layout)
             else:
                 right_column.addLayout(row_layout)
 
-        # Creiamo il separatore verticale per il contenuto
         content_separator = QFrame()
         content_separator.setFrameShape(QFrame.VLine)
         content_separator.setFrameShadow(QFrame.Sunken)
@@ -403,71 +449,110 @@ class MainWindow(QMainWindow):
         """)
         
         list_layout.addLayout(left_column)
-        list_layout.addSpacing(10)  # Aggiungi spazio prima del separatore
+        list_layout.addSpacing(10)
         list_layout.addWidget(content_separator)
-        list_layout.addSpacing(15)  # Aggiungi spazio dopo il separatore
+        list_layout.addSpacing(15)
         list_layout.addLayout(right_column)
 
         scroll_area.setWidget(ing_widget)
         ingredients_layout.addWidget(scroll_area)
         main_layout.addWidget(ingredients_frame)
 
-        # Parameters section
+        # Layout inferiore per Virtù e Risultati
+        bottom_layout = QHBoxLayout()
+
+        # Pannello Virtù
+        virtues_frame = QFrame(self)
+        virtues_frame.setFrameShape(QFrame.StyledPanel)
+        virtues_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgba(30, 30, 30, 180);
+                border-radius: 10px;
+            }
+            QLabel {
+                background: none;
+                background-color: transparent;
+            }
+        """)
+        virtues_shadow = QGraphicsDropShadowEffect()
+        virtues_shadow.setBlurRadius(15)
+        virtues_shadow.setXOffset(3)
+        virtues_shadow.setYOffset(3)
+        virtues_shadow.setColor(QColor(0, 0, 0, 160))
+        virtues_frame.setGraphicsEffect(virtues_shadow)
+
         self.parameters = ["gusto", "colore", "gradazione", "schiuma"]
         self.sliders = {}
         self.param_labels = {}
-        for param in self.parameters:
-            param_frame = QFrame(self)
-            param_frame.setFrameShape(QFrame.StyledPanel)
-            param_frame.setStyleSheet("""
-                QFrame {
-                    background-color: rgba(30, 30, 30, 180);
-                    border-radius: 10px;
-                }
-                QLabel {
-                    background: none;
-                    background-color: transparent;
-                }
-            """)
-            param_shadow = QGraphicsDropShadowEffect()
-            param_shadow.setBlurRadius(15)
-            param_shadow.setXOffset(3)
-            param_shadow.setYOffset(3)
-            param_shadow.setColor(QColor(0, 0, 0, 160))
-            param_frame.setGraphicsEffect(param_shadow)
 
-            param_layout = QVBoxLayout(param_frame)
-            title_layout = QHBoxLayout()
-            title_label = QLabel(f"Range {param.capitalize()}:", self)
-            title_label.setAlignment(Qt.AlignLeft)
-            title_label.setStyleSheet("""
-                color: white;
-                font-family: Alegreya;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 2px;
-            """)
+        virtues_layout = QVBoxLayout(virtues_frame)
+        # Titolo principale del pannello Virtù con OutlinedLabel
+        virtues_title = OutlinedLabel(" Virtù", self)
+        virtues_title.setFont(QFont("Alegreya", 20, QFont.Bold))
+        virtues_title.setMinimumHeight(40)
+        virtues_title.setTextColor(QColor("#FFD700"))
+        virtues_title.setOutlineColor(QColor("#000000"))
+        virtues_title.setOutlineThickness(2)
+        virtues_layout.addWidget(virtues_title)
+        
+        # Aggiunta degli slider nel pannello Virtù
+        for param in self.parameters:
+            param_layout = QVBoxLayout()
+            
+            # Creiamo un widget container per il titolo
+            title_container = QWidget()
+            title_layout = QHBoxLayout(title_container)  # Assegniamo subito il parent
+            title_layout.setSpacing(10)
+            title_layout.setContentsMargins(0, 0, 0, 0)
+            
+            # Titolo del parametro con OutlinedLabel
+            title_label = OutlinedLabel(f" {param.capitalize()}", self)
+            title_label.setFont(QFont("Alegreya", 14, QFont.Bold))
+            title_label.setMinimumHeight(30)
+            title_label.setTextColor(QColor("#FFD700"))
+            title_label.setOutlineColor(QColor("#000000"))
+            title_label.setOutlineThickness(2)
             title_layout.addWidget(title_label)
+            
+            title_layout.addStretch()
+            
             range_label = QLabel("min 0 - max 10", self)
-            range_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             range_label.setStyleSheet("""
                 color: white;
                 font-family: Alegreya;
                 font-size: 14px;
                 font-weight: bold;
-                padding: 2px;
             """)
             title_layout.addWidget(range_label)
             self.param_labels[param] = range_label
-            param_layout.addLayout(title_layout)
-
+            
+            param_layout.addWidget(title_container)
+            
             slider = SquareSlider(0, 10, self)
             slider.valueChanged.connect(lambda low, high, p=param: self.updateParameterLabel(p, low, high))
             param_layout.addWidget(slider)
             self.sliders[param] = slider
-            main_layout.addWidget(param_frame)
+            
+            virtues_layout.addLayout(param_layout)
+        # Pannello Risultati
+        results_frame = QFrame(self)
+        results_frame.setFrameShape(QFrame.StyledPanel)
+        results_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgba(30, 30, 30, 180);
+                border-radius: 10px;
+            }
+        """)
+        results_shadow = QGraphicsDropShadowEffect()
+        results_shadow.setBlurRadius(15)
+        results_shadow.setXOffset(3)
+        results_shadow.setYOffset(3)
+        results_shadow.setColor(QColor(0, 0, 0, 160))
+        results_frame.setGraphicsEffect(results_shadow)
 
-        # Compute button and results section
+        results_layout = QVBoxLayout(results_frame)
+
+        # Compute button
         self.compute_button = QPushButton("Trova Ricetta", self)
         icon = QIcon("search_icon.png")
         self.compute_button.setIcon(icon)
@@ -496,8 +581,9 @@ class MainWindow(QMainWindow):
         button_shadow.setColor(QColor(0, 0, 0, 160))
         self.compute_button.setGraphicsEffect(button_shadow)
         self.compute_button.clicked.connect(self.compute_combination)
-        main_layout.addWidget(self.compute_button)
+        results_layout.addWidget(self.compute_button)
 
+        # Results text area
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
         self.result_text.setStyleSheet("""
@@ -538,7 +624,14 @@ class MainWindow(QMainWindow):
         loading_layout.addStretch()
         
         self.loading_widget.hide()
-        main_layout.addWidget(self.result_text)
+        results_layout.addWidget(self.result_text)
+
+        # Aggiunta dei pannelli al layout inferiore
+        bottom_layout.addWidget(virtues_frame, 3)
+        bottom_layout.addWidget(results_frame, 4)
+
+        # Aggiunta del layout inferiore al layout principale
+        main_layout.addLayout(bottom_layout)
 
     def updateParameterLabel(self, param, low, high):
         label = self.param_labels.get(param)
@@ -554,7 +647,6 @@ class MainWindow(QMainWindow):
         required_ingredients = []
         unlocked_ingredients = []
         
-        # Raccogli gli ingredienti richiesti e sbloccati
         for ingr in ingredienti:
             if self.required_checkboxes[ingr].isChecked():
                 required_ingredients.append(ingredienti.index(ingr))
@@ -574,11 +666,10 @@ class MainWindow(QMainWindow):
         self.spinner.stop()
         self.loading_widget.hide()
     
-        quantities, values, stats = result  # Modifica: ora result contiene stats invece di counter
+        quantities, values, stats = result
     
         if quantities:
             result_text = "✅ Combinazione ottimale trovata!\n\n"
-            # Aggiungiamo il tempo di esecuzione in evidenza
             result_text += f"⏱️ Tempo impiegato: {stats['execution_time']:.2f} secondi\n\n"
         
             result_text += "Ingredienti da utilizzare:\n"
@@ -592,7 +683,6 @@ class MainWindow(QMainWindow):
             for key, val in values.items():
                 result_text += f"{key.capitalize()}: {val:.1f}\n"
         
-            # Aggiungiamo le statistiche dettagliate
             result_text += "\nStatistiche della ricerca:\n"
             result_text += "-" * 30 + "\n"
             result_text += f"Combinazioni teoriche: {stats['total_combinations']:,}\n"
@@ -623,7 +713,6 @@ class MainWindow(QMainWindow):
                 low, high = self.worker.ranges[param]
                 result_text += f"• {param.capitalize()}: {low} - {high}\n"
         
-            # Aggiungiamo le statistiche anche in caso di fallimento
             result_text += "\nStatistiche della ricerca:\n"
             result_text += "-" * 30 + "\n"
             result_text += f"Combinazioni teoriche: {stats['total_combinations']:,}\n"
