@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from math import cos, sin, pi
 
 # Import calculator functions and data from calculator.py
-from calculator import ingredienti, UNLOCKABLE_INGREDIENTS, find_optimal_combination
+from calculator import ingredienti, UNLOCKABLE_INGREDIENTS, find_optimal_combination, ALWAYS_AVAILABLE
 
 class SpinningLoader(QWidget):
     def __init__(self, parent=None, size=32, color=QColor(74, 158, 255)):
@@ -89,7 +89,6 @@ class SquareSlider(QWidget):
         self._font.setBold(True)
         self.setMinimumHeight(45)
         self.setMouseTracking(True)
-
     def cellRect(self, index):
         total_width = self.width() - 2 * self._cell_margin
         total_spacing = self._cell_spacing * (self.num_cells - 1)
@@ -194,6 +193,7 @@ class SquareSlider(QWidget):
             self._high = high
             self.valueChanged.emit(self._low, self._high)
             self.update()
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
         """)
         main_layout.addWidget(header)
 
-        # Ingredients selection section
+        # Frame principale per la sezione ingredienti
         ingredients_frame = QFrame(self)
         ingredients_frame.setFrameShape(QFrame.StyledPanel)
         ingredients_frame.setStyleSheet("""
@@ -245,7 +245,7 @@ class MainWindow(QMainWindow):
         ingredients_frame.setGraphicsEffect(ingredients_shadow)
 
         ingredients_layout = QVBoxLayout(ingredients_frame)
-        ingredients_label = QLabel("Ingredienti obbligatori:", self)
+        ingredients_label = QLabel("Lista Ingredienti", self)
         ingredients_label.setAlignment(Qt.AlignLeft)
         ingredients_label.setStyleSheet("""
             color: white;
@@ -256,91 +256,162 @@ class MainWindow(QMainWindow):
         """)
         ingredients_layout.addWidget(ingredients_label)
 
+        # Header delle colonne
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(5, 5, 5, 5)  # Imposta margini uniformi
+        header_layout.setSpacing(0)  # Rimuove lo spacing tra gli elementi
+        
+        # Header colonna sinistra
+        left_header = QHBoxLayout()
+        left_header.setContentsMargins(0, 0, 0, 0)
+        left_header.setSpacing(0)
+        left_ingr_label = QLabel("Ingrediente", self)
+        left_ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        left_header.addWidget(left_ingr_label, stretch=3, alignment=Qt.AlignLeft)
+        left_header.addWidget(QLabel("Sbloccato", self), stretch=1)
+        left_header.addWidget(QLabel("Obbligatorio", self), stretch=1)
+        
+        # Header colonna destra
+        right_header = QHBoxLayout()
+        right_header.setContentsMargins(0, 0, 0, 0)
+        right_header.setSpacing(0)
+        right_ingr_label = QLabel("Ingrediente", self)
+        right_ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        right_header.addWidget(right_ingr_label, stretch=3, alignment=Qt.AlignLeft)
+        right_header.addWidget(QLabel("Sbloccato", self), stretch=1)
+        right_header.addWidget(QLabel("Obbligatorio", self), stretch=1)
+        
+        # Aggiunta degli header al layout principale
+        # Creiamo il separatore verticale per l'header
+        header_separator = QFrame()
+        header_separator.setFrameShape(QFrame.VLine)
+        header_separator.setFrameShadow(QFrame.Sunken)
+        header_separator.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0);
+                width: 1px;
+            }
+        """)
+        
+        header_layout.addLayout(left_header)
+        header_layout.addSpacing(10)  # Aggiungi spazio prima del separatore
+        header_layout.addWidget(header_separator)
+        header_layout.addSpacing(5)  # Aggiungi spazio dopo il separatore
+        header_layout.addLayout(right_header)
+        
+        # Stile per le label degli header
+        for label in self.findChildren(QLabel):
+            if label.parent() == self and label.text() in ["Ingrediente", "Sbloccato", "Obbligatorio"]:
+                label.setStyleSheet("""
+                    color: white;
+                    font-family: Alegreya;
+                    font-size: 13px;
+                    font-weight: bold;
+                    padding: 2px;
+                """)
+                
+        ingredients_layout.addLayout(header_layout)
+
+        # Area scrollabile per gli ingredienti
         scroll_area = QScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setMinimumHeight(150)
-        ing_widget = QWidget(self)
-        grid_layout = QGridLayout(ing_widget)
-        grid_layout.setHorizontalSpacing(5)
-        grid_layout.setVerticalSpacing(5)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        # Widget per la lista degli ingredienti
+        ing_widget = QWidget()
+        list_layout = QHBoxLayout(ing_widget)  # Cambiato in QHBoxLayout per le due colonne
+        list_layout.setContentsMargins(5, 5, 5, 5)  # Imposta gli stessi margini dell'header
+        list_layout.setSpacing(0)  # Rimuove lo spacing tra gli elementi
         
-        # Checkbox per gli ingredienti obbligatori
-        for index, ingr in enumerate(ingredienti):
-            cb = QCheckBox(ingr, self)
-            cb.setStyleSheet("""
+        # Creiamo due colonne
+        left_column = QVBoxLayout()
+        right_column = QVBoxLayout()
+        
+        # Dizionari per tenere traccia dei checkbox
+        self.unlocked_checkboxes = {}
+        self.required_checkboxes = {}
+
+        # Calcoliamo il punto medio della lista ingredienti
+        mid_point = len(ingredienti) // 2
+        
+        # Creazione delle righe per ogni ingrediente, dividendo tra colonna sinistra e destra
+        for i, ingr in enumerate(ingredienti):
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(0)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            
+            # Label ingrediente
+            ingr_label = QLabel(ingr, self)
+            ingr_label.setStyleSheet("""
                 color: white;
                 font-family: Alegreya;
                 font-size: 12px;
                 font-weight: bold;
             """)
-            row = index % 5
-            col = index // 5
-            grid_layout.addWidget(cb, row, col)
-            
-        ing_widget.setLayout(grid_layout)
+            ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Allineamento esplicito
+            row_layout.addWidget(ingr_label, stretch=3, alignment=Qt.AlignLeft)  # Allineamento nel layout
+
+            # Checkbox "Sbloccato"
+            unlocked_cb = QCheckBox(self)
+            unlocked_cb.setStyleSheet("""
+                QCheckBox {
+                    color: white;
+                    font-family: Alegreya;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+            """)
+            if ingr in ALWAYS_AVAILABLE:
+                unlocked_cb.setChecked(True)
+                unlocked_cb.setEnabled(False)
+            self.unlocked_checkboxes[ingr] = unlocked_cb
+            row_layout.addWidget(unlocked_cb, stretch=1, alignment=Qt.AlignCenter)
+
+            # Checkbox "Obbligatorio"
+            required_cb = QCheckBox(self)
+            required_cb.setStyleSheet("""
+                QCheckBox {
+                    color: white;
+                    font-family: Alegreya;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+            """)
+            self.required_checkboxes[ingr] = required_cb
+            row_layout.addWidget(required_cb, stretch=1, alignment=Qt.AlignCenter)
+
+            # Aggiungi alla colonna appropriata
+            if i < mid_point:
+                left_column.addLayout(row_layout)
+            else:
+                right_column.addLayout(row_layout)
+
+        # Creiamo il separatore verticale per il contenuto
+        content_separator = QFrame()
+        content_separator.setFrameShape(QFrame.VLine)
+        content_separator.setFrameShadow(QFrame.Sunken)
+        content_separator.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 100);
+                width: 1px;
+            }
+        """)
+        
+        list_layout.addLayout(left_column)
+        list_layout.addSpacing(10)  # Aggiungi spazio prima del separatore
+        list_layout.addWidget(content_separator)
+        list_layout.addSpacing(15)  # Aggiungi spazio dopo il separatore
+        list_layout.addLayout(right_column)
+
         scroll_area.setWidget(ing_widget)
         ingredients_layout.addWidget(scroll_area)
         main_layout.addWidget(ingredients_frame)
 
-        # Sezione ingredienti sbloccati
-        unlocked_frame = QFrame(self)
-        unlocked_frame.setFrameShape(QFrame.StyledPanel)
-        unlocked_frame.setStyleSheet("""
-            QFrame {
-                background-color: rgba(30, 30, 30, 180);
-                border-radius: 10px;
-            }
-            QLabel {
-                background: none;
-                background-color: transparent;
-            }
-        """)
-        unlocked_shadow = QGraphicsDropShadowEffect()
-        unlocked_shadow.setBlurRadius(15)
-        unlocked_shadow.setXOffset(3)
-        unlocked_shadow.setYOffset(3)
-        unlocked_shadow.setColor(QColor(0, 0, 0, 160))
-        unlocked_frame.setGraphicsEffect(unlocked_shadow)
-
-        unlocked_layout = QVBoxLayout(unlocked_frame)
-        unlocked_label = QLabel("Ingredienti Sbloccati:", self)
-        unlocked_label.setAlignment(Qt.AlignLeft)
-        unlocked_label.setStyleSheet("""
-            color: white;
-            font-family: Alegreya;
-            font-size: 14px;
-            font-weight: bold;
-            padding: 2px;
-        """)
-        unlocked_layout.addWidget(unlocked_label)
-
-        unlocked_scroll = QScrollArea(self)
-        unlocked_scroll.setWidgetResizable(True)
-        unlocked_scroll.setMinimumHeight(150)
-        unlocked_widget = QWidget(self)
-        unlocked_grid = QGridLayout(unlocked_widget)
-        unlocked_grid.setHorizontalSpacing(5)
-        unlocked_grid.setVerticalSpacing(5)
-        
-        # Checkbox solo per gli ingredienti sbloccabili
-        self.unlocked_checkboxes = []
-        for index, ingr in enumerate(UNLOCKABLE_INGREDIENTS):
-            cb = QCheckBox(ingr, self)
-            cb.setStyleSheet("""
-                color: white;
-                font-family: Alegreya;
-                font-size: 12px;
-                font-weight: bold;
-            """)
-            row = index % 5
-            col = index // 5
-            unlocked_grid.addWidget(cb, row, col)
-            self.unlocked_checkboxes.append(cb)
-            
-        unlocked_widget.setLayout(unlocked_grid)
-        unlocked_scroll.setWidget(unlocked_widget)
-        unlocked_layout.addWidget(unlocked_scroll)
-        main_layout.addWidget(unlocked_frame)
         # Parameters section
         self.parameters = ["gusto", "colore", "gradazione", "schiuma"]
         self.sliders = {}
@@ -368,7 +439,7 @@ class MainWindow(QMainWindow):
             param_layout = QVBoxLayout(param_frame)
             title_layout = QHBoxLayout()
             title_label = QLabel(f"Range {param.capitalize()}:", self)
-            title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            title_label.setAlignment(Qt.AlignLeft)
             title_label.setStyleSheet("""
                 color: white;
                 font-family: Alegreya;
@@ -483,21 +554,12 @@ class MainWindow(QMainWindow):
         required_ingredients = []
         unlocked_ingredients = []
         
-        # Raccogli gli ingredienti richiesti
-        scroll_area = self.findChild(QScrollArea)
-        if scroll_area:
-            widget = scroll_area.widget()
-            if widget:
-                checkboxes = widget.findChildren(QCheckBox)
-                for i, cb in enumerate(checkboxes):
-                    if cb.isChecked():
-                        required_ingredients.append(i)
-        
-        # Raccogli gli ingredienti sbloccati
-        for i, cb in enumerate(self.unlocked_checkboxes):
-            if cb.isChecked():
-                full_index = ingredienti.index(UNLOCKABLE_INGREDIENTS[i])
-                unlocked_ingredients.append(full_index)
+        # Raccogli gli ingredienti richiesti e sbloccati
+        for ingr in ingredienti:
+            if self.required_checkboxes[ingr].isChecked():
+                required_ingredients.append(ingredienti.index(ingr))
+            if self.unlocked_checkboxes[ingr].isChecked() or ingr in ALWAYS_AVAILABLE:
+                unlocked_ingredients.append(ingredienti.index(ingr))
 
         ranges = {}
         for param in self.parameters:
