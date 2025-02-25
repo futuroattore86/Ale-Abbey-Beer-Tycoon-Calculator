@@ -8,47 +8,83 @@ coefficients = {
     'schiuma': [0.5, 0.8, 0.0, 2.0, 1.5, 0.5, 0.5, -1.0, -0.5, 0.0, 0.5, 0.5, 0.0, -0.5, 0.0, 0.0, 0.5, 1.0, 0.5, 0.5, 1.0, 0.0, -0.5, 0.0, 0.0, -1.0, -1.0, 0.0, 1.5, 0.0, 0.0, 2.0]
 }
 
-# Lista completa degli ingredienti
+# Lista completa degli ingredienti (aggiornata con le traduzioni corrette dal gioco)
 ingredienti = [
-    'Malto chiaro',
-    'Malto ambrato',
-    'Malto marrone',
-    'Malto di frumento',
-    'Malto di segale',
-    'Malto tostato',
-    'Malto affumicato',
+    'Malto Chiaro',
+    'Malto Ambrato',
+    'Malto Marrone',
+    'Malto di Frumento',
+    'Malto di Segale',
+    'Malto Tostato',
+    'Malto Affumicato',
     'Zucchero',
-    'Zucchero di canna caramellato',
+    'Zucchero Scuro Candito',
     'Miele',
     'Bacche',
     'Uva',
     'Ciliegie',
-    'Lievito standard',
+    'Lievito Standard',
     'Lievito Lager',
-    'Lievito Esterico',
-    'Lievito forte',
-    'Lievito selvatico',
-    'Luppolo classico',
-    'Luppolo Cascade',
+    'Lievito Estereo',
+    'Lievito Forte',
+    'Lievito Selvaggio',
+    'Luppolo Classico',
+    'Luppolo Cascadus',
     'Luppolo Magnum',
     'Gruit',
     'Eucalipto',
-    'Semi di coriandolo',
-    'Scorza d\'arancia',
+    'Semi di Coriandolo',
+    'Scorza di Arancia',
     'Caffè',
     'Pepe',
     'Zucca',
-    'Amido di frumento',
-    'Corn Flakes',
-    'Nutrienti per lievito',
-    'Frumento non maltato'
+    'Fecola di Frumento',
+    'Fiocchi di Mais',
+    'Nutrienti per Lievito',
+    'Fiocchi di Frumento'
+]
+
+# Ordine di sblocco degli ingredienti nel gioco
+INGREDIENTI_ORDINE_SBLOCCO = [
+    'Malto Chiaro',
+    'Lievito Standard',
+    'Gruit',
+    'Malto Marrone',
+    'Malto Ambrato',
+    'Luppolo Classico',
+    'Miele',
+    'Eucalipto',
+    'Lievito Forte',
+    'Malto di Frumento',
+    'Lievito Estereo',
+    'Pepe',
+    'Zucchero Scuro Candito',
+    'Fecola di Frumento',
+    'Zucchero',
+    'Ciliegie',
+    'Bacche',
+    'Luppolo Cascadus',
+    'Luppolo Magnum',
+    'Malto Tostato',
+    'Lievito Selvaggio',
+    'Lievito Lager',
+    'Malto di Segale',
+    'Fiocchi di Frumento',
+    'Semi di Coriandolo',
+    'Scorza di Arancia',
+    'Uva',
+    'Zucca',
+    'Caffè',
+    'Fiocchi di Mais',
+    'Nutrienti per Lievito',
+    'Malto Affumicato'
 ]
 
 # Ingredienti sempre disponibili all'inizio del gioco
-ALWAYS_AVAILABLE = ['Malto chiaro', 'Lievito standard']
+ALWAYS_AVAILABLE = ['Malto Chiaro', 'Lievito Standard']
 
 # Lista degli ingredienti sbloccabili (tutti tranne quelli sempre disponibili)
-UNLOCKABLE_INGREDIENTS = [ingr for ingr in ingredienti if ingr not in ALWAYS_AVAILABLE]
+UNLOCKABLE_INGREDIENTS = [ingr for ingr in INGREDIENTI_ORDINE_SBLOCCO if ingr not in ALWAYS_AVAILABLE]
 
 def calculate_values(quantities):
     """
