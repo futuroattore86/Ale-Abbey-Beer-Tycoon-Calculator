@@ -1,16 +1,77 @@
 import sys
-from PySide6.QtCore import Qt, Signal, QRect, QPoint
+from PySide6.QtCore import Qt, Signal, QRect, QPoint, QThread, QTimer
 from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase
 from PySide6.QtWidgets import (
     QWidget, QApplication, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QMainWindow, 
     QPushButton, QCheckBox, QTextEdit, QScrollArea, QFrame, QGraphicsDropShadowEffect
 )
+from math import cos, sin, pi
 
 # Import calculator functions and data from calculator.py
 from calculator import ingredienti, find_optimal_combination
 
+class SpinningLoader(QWidget):
+    def __init__(self, parent=None, size=32, color=QColor(74, 158, 255)):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self.angle = 0
+        self.color = color
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.rotate)
+        self.dots = 8  # Numero di punti nel cerchio
+        self.stopped = True
+
+    def rotate(self):
+        self.angle = (self.angle + 45) % 360
+        self.update()
+
+    def start(self):
+        if self.stopped:
+            self.stopped = False
+            self.timer.start(100)  # Aggiorna ogni 100ms
+
+    def stop(self):
+        self.stopped = True
+        self.timer.stop()
+
+    def paintEvent(self, event):
+        if self.stopped:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        center = QPoint(self.width() // 2, self.height() // 2)
+        radius = min(self.width(), self.height()) // 3
+        
+        for i in range(self.dots):
+            angle = i * (360 / self.dots) + self.angle
+            rad_angle = angle * pi / 180
+            x = center.x() + radius * cos(rad_angle)
+            y = center.y() + radius * sin(rad_angle)
+            
+            opacity = (i / self.dots) * 255
+            dot_color = QColor(self.color)
+            dot_color.setAlpha(int(opacity))
+            
+            painter.setBrush(dot_color)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPoint(int(x), int(y)), 3, 3)
+
+class CalculationWorker(QThread):
+    finished = Signal(tuple)
+    
+    def __init__(self, required_ingredients, ranges):
+        super().__init__()
+        self.required_ingredients = required_ingredients
+        self.ranges = ranges
+        
+    def run(self):
+        result = find_optimal_combination(self.required_ingredients, self.ranges)
+        self.finished.emit(result)
+
 class SquareSlider(QWidget):
-    valueChanged = Signal(int, int)  # Emits (low, high)
+    valueChanged = Signal(int, int)
 
     def __init__(self, minimum=0, maximum=10, parent=None):
         super().__init__(parent)
@@ -23,11 +84,10 @@ class SquareSlider(QWidget):
         self._cell_spacing = 2
         self._selection_start = None
         self._current_cell = None
-        # Set the font to Alegreya bold with increased size
-        self._font = QFont("Alegreya", 9)
+        self._font = QFont("Alegreya", 11)
         self._font.setBold(True)
-        self.setMinimumHeight(40)
-        self.setMouseTracking(True)  # Abilita il tracking del mouse
+        self.setMinimumHeight(45)
+        self.setMouseTracking(True)
 
     def cellRect(self, index):
         total_width = self.width() - 2 * self._cell_margin
@@ -51,20 +111,17 @@ class SquareSlider(QWidget):
 
         for i in range(self.num_cells):
             rect = self.cellRect(i)
-            # Colora le celle nel range selezionato
             if self._low <= i <= self._high:
                 painter.setBrush(QColor(100, 150, 250))
             else:
                 painter.setBrush(QColor(200, 200, 200))
             
-            # Evidenzia la cella su cui si trova il mouse durante la selezione
             if self._selection_start is not None and i == self._current_cell:
                 painter.setBrush(QColor(150, 200, 250))
 
             painter.setPen(QPen(Qt.black, 1))
             painter.drawRect(rect)
             
-            # Disegna il numero
             text = f"{i}"
             metrics = painter.fontMetrics()
             text_width = metrics.horizontalAdvance(text)
@@ -75,7 +132,7 @@ class SquareSlider(QWidget):
             painter.drawText(int(text_x), int(text_y), text)
 
     def mousePressEvent(self, event):
-        cell = self.getCellAtPosition(event.pos())
+        cell = self.getCellAtPosition(event.position().toPoint())
         if cell is not None:
             self._selection_start = cell
             self._current_cell = cell
@@ -86,10 +143,9 @@ class SquareSlider(QWidget):
 
     def mouseMoveEvent(self, event):
         if self._selection_start is not None:
-            cell = self.getCellAtPosition(event.pos())
+            cell = self.getCellAtPosition(event.position().toPoint())
             if cell is not None and cell != self._current_cell:
                 self._current_cell = cell
-                # Aggiorna il range in base alla direzione della selezione
                 if cell < self._selection_start:
                     self._low = cell
                     self._high = self._selection_start
@@ -140,10 +196,9 @@ class SquareSlider(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Ale-Abbey Beer Tycoon Calculator")
+        self.setWindowTitle("Ale Abbey Monastery Brewery Tycoon Calculator")
         self.resize(800, 900)
 
-        # Setup background using background.jpg.
         self.setStyleSheet("""
             QMainWindow {
                 background-image: url(background.jpg);
@@ -158,7 +213,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        header = QLabel("Ale-Abbey Beer Tycoon Calculator", self)
+        header = QLabel("Ale Abbey Monastery Brewery Tycoon Calculator", self)
         header.setAlignment(Qt.AlignCenter)
         header.setStyleSheet("""
             font-size: 28px;
@@ -168,13 +223,16 @@ class MainWindow(QMainWindow):
         """)
         main_layout.addWidget(header)
 
-        # Ingredients selection using a grid layout (5 items per column).
         ingredients_frame = QFrame(self)
         ingredients_frame.setFrameShape(QFrame.StyledPanel)
         ingredients_frame.setStyleSheet("""
             QFrame {
                 background-color: rgba(30, 30, 30, 180);
                 border-radius: 10px;
+            }
+            QLabel {
+                background: none;
+                background-color: transparent;
             }
         """)
         ingredients_shadow = QGraphicsDropShadowEffect()
@@ -189,11 +247,9 @@ class MainWindow(QMainWindow):
         ingredients_label.setAlignment(Qt.AlignLeft)
         ingredients_label.setStyleSheet("""
             color: white;
-            background-color: #4F4F4F;
             font-family: Alegreya;
             font-size: 14px;
             font-weight: bold;
-            border-radius: 5px;
             padding: 2px;
         """)
         ingredients_layout.addWidget(ingredients_label)
@@ -221,7 +277,6 @@ class MainWindow(QMainWindow):
         ingredients_layout.addWidget(scroll_area)
         main_layout.addWidget(ingredients_frame)
 
-        # Parameters selection using SquareSlider.
         self.parameters = ["gusto", "colore", "gradazione", "schiuma"]
         self.sliders = {}
         self.param_labels = {}
@@ -232,6 +287,10 @@ class MainWindow(QMainWindow):
                 QFrame {
                     background-color: rgba(30, 30, 30, 180);
                     border-radius: 10px;
+                }
+                QLabel {
+                    background: none;
+                    background-color: transparent;
                 }
             """)
             param_shadow = QGraphicsDropShadowEffect()
@@ -247,11 +306,9 @@ class MainWindow(QMainWindow):
             title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             title_label.setStyleSheet("""
                 color: white;
-                background-color: #4F4F4F;
                 font-family: Alegreya;
                 font-size: 14px;
                 font-weight: bold;
-                border-radius: 5px;
                 padding: 2px;
             """)
             title_layout.addWidget(title_label)
@@ -259,11 +316,9 @@ class MainWindow(QMainWindow):
             range_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             range_label.setStyleSheet("""
                 color: white;
-                background-color: #4F4F4F;
                 font-family: Alegreya;
                 font-size: 14px;
                 font-weight: bold;
-                border-radius: 5px;
                 padding: 2px;
             """)
             title_layout.addWidget(range_label)
@@ -276,7 +331,6 @@ class MainWindow(QMainWindow):
             self.sliders[param] = slider
             main_layout.addWidget(param_frame)
 
-        # Compute button with integrated search icon.
         self.compute_button = QPushButton("Trova Ricetta", self)
         icon = QIcon("search_icon.png")
         self.compute_button.setIcon(icon)
@@ -293,6 +347,10 @@ class MainWindow(QMainWindow):
             QPushButton:hover {
                 background-color: rgba(50, 50, 50, 200);
             }
+            QPushButton:disabled {
+                background-color: rgba(30, 30, 30, 100);
+                color: rgba(255, 255, 255, 128);
+            }
         """)
         button_shadow = QGraphicsDropShadowEffect()
         button_shadow.setBlurRadius(15)
@@ -303,7 +361,6 @@ class MainWindow(QMainWindow):
         self.compute_button.clicked.connect(self.compute_combination)
         main_layout.addWidget(self.compute_button)
 
-        # Result text box
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
         self.result_text.setStyleSheet("""
@@ -323,15 +380,40 @@ class MainWindow(QMainWindow):
         result_shadow.setYOffset(3)
         result_shadow.setColor(QColor(0, 0, 0, 160))
         self.result_text.setGraphicsEffect(result_shadow)
+
+        self.loading_widget = QWidget(self.result_text)
+        loading_layout = QHBoxLayout(self.loading_widget)
+        loading_layout.setContentsMargins(10, 10, 10, 10)
+        loading_layout.setSpacing(10)
+        
+        self.spinner = SpinningLoader(self, size=24)
+        loading_layout.addWidget(self.spinner)
+        
+        self.loading_label = QLabel("Ricerca in corso...\nAttendi mentre calcolo la combinazione ottimale...", self)
+        self.loading_label.setStyleSheet("""
+            color: white;
+            font-family: Alegreya;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 5px;
+        """)
+        loading_layout.addWidget(self.loading_label)
+        loading_layout.addStretch()
+        
+        self.loading_widget.hide()
         main_layout.addWidget(self.result_text)
 
     def updateParameterLabel(self, param, low, high):
         label = self.param_labels.get(param)
         if label:
             label.setText(f"min {low} - max {high}")
-        print(f"{param.capitalize()} updated: {low} - {high}")
 
     def compute_combination(self):
+        self.compute_button.setEnabled(False)
+        self.result_text.clear()
+        self.loading_widget.show()
+        self.spinner.start()
+        
         required_ingredients = []
         scroll_area = self.findChild(QScrollArea)
         if scroll_area:
@@ -346,40 +428,79 @@ class MainWindow(QMainWindow):
         for param in self.parameters:
             slider = self.sliders[param]
             ranges[param] = (slider.low(), slider.high())
-        quantities, values, counter = find_optimal_combination(required_ingredients, ranges)
+
+        self.worker = CalculationWorker(required_ingredients, ranges)
+        self.worker.finished.connect(self.on_calculation_complete)
+        self.worker.start()
+
+    def on_calculation_complete(self, result):
+        self.spinner.stop()
+        self.loading_widget.hide()
+        
+        quantities, values, counter = result
+        
         if quantities:
-            result = "Optimal Combination Found:\n\n"
+            result_text = "✅ Combinazione ottimale trovata!\n\n"
+            result_text += "Ingredienti da utilizzare:\n"
+            result_text += "-" * 30 + "\n"
             for ingr, qty in zip(ingredienti, quantities):
-                result += f"{ingr}: {qty} units\n"
-            result += "\nCalculated Values:\n"
+                if qty > 0:
+                    result_text += f"{ingr}: {qty} unità\n"
+            
+            result_text += "\nValori ottenuti:\n"
+            result_text += "-" * 30 + "\n"
             for key, val in values.items():
-                result += f"{key.capitalize()}: {val}\n"
-            result += f"\nCombinations Examined: {counter}\n"
+                result_text += f"{key.capitalize()}: {val:.1f}\n"
+            
+            result_text += f"\nCombinazioni esaminate: {counter:,}\n"
         else:
-            result = f"No valid combination found.\nCombinations Examined: {counter}\n"
-        self.result_text.setPlainText(result)
+            result_text = "❌ Nessuna combinazione valida trovata!\n\n"
+            result_text += "Possibili cause:\n"
+            result_text += "-" * 30 + "\n"
+            result_text += "• Range dei valori troppo restrittivo\n"
+            result_text += "• Troppi ingredienti obbligatori selezionati\n"
+            result_text += "• Combinazione di requisiti impossibile da soddisfare\n\n"
+            
+            if self.worker.required_ingredients:
+                result_text += "Ingredienti obbligatori selezionati:\n"
+                result_text += "-" * 30 + "\n"
+                for idx in self.worker.required_ingredients:
+                    result_text += f"• {ingredienti[idx]}\n"
+            
+            result_text += "\nRange richiesti:\n"
+            result_text += "-" * 30 + "\n"
+            for param in self.parameters:
+                low, high = self.worker.ranges[param]
+                result_text += f"• {param.capitalize()}: {low} - {high}\n"
+            
+            result_text += f"\nCombinazioni esaminate: {counter:,}\n"
+
+        self.result_text.setPlainText(result_text)
+        self.compute_button.setEnabled(True)
+        self.worker.deleteLater()
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # Load Alegreya font
     font_id = QFontDatabase.addApplicationFont("fonts/Alegreya-Regular.ttf")
     font_id_bold = QFontDatabase.addApplicationFont("fonts/Alegreya-Bold.ttf")
     
     if font_id == -1 or font_id_bold == -1:
         print("Warning: Could not load Alegreya font. Falling back to system font.")
     
-    # Set global bold font for the entire application
     global_font = QFont("Alegreya", 12)
     global_font.setBold(True)
     app.setFont(global_font)
     
-    # Set global style for the application
     app.setStyleSheet("""
         * {
             font-family: Alegreya;
             font-weight: bold;
+        }
+        QLabel {
+            background: none;
+            background-color: transparent;
         }
     """)
     
