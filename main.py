@@ -1,9 +1,9 @@
 import sys
 from PySide6.QtCore import Qt, Signal, QRect, QPoint, QThread, QTimer
-from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase, QPainterPath
+from PySide6.QtGui import QPainter, QPen, QColor, QFont, QIcon, QFontDatabase, QPainterPath, QPalette
 from PySide6.QtWidgets import (
     QWidget, QApplication, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QMainWindow, 
-    QPushButton, QCheckBox, QTextEdit, QScrollArea, QFrame, QGraphicsDropShadowEffect
+    QPushButton, QCheckBox, QTextEdit, QScrollArea, QFrame, QGraphicsDropShadowEffect, QSizePolicy
 )
 from math import cos, sin, pi
 
@@ -246,7 +246,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ale Abbey Monastery Brewery Tycoon Calculator")
-        self.resize(1200, 800)  # Modificata la dimensione della finestra
+        self.setMinimumSize(1366, 800)  # Dimensione minima della finestra
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.setStyleSheet("""
             QMainWindow {
@@ -274,6 +275,7 @@ class MainWindow(QMainWindow):
 
         # Frame principale per la sezione ingredienti
         ingredients_frame = QFrame(self)
+        ingredients_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         ingredients_frame.setFrameShape(QFrame.StyledPanel)
         ingredients_frame.setStyleSheet("""
             QFrame {
@@ -358,27 +360,52 @@ class MainWindow(QMainWindow):
                 # Area scrollabile per gli ingredienti
         scroll_area = QScrollArea(self)
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumHeight(300)
+        scroll_area.setMinimumHeight(150)
         scroll_area.setStyleSheet("""
             QScrollArea {
                 border: none;
                 background-color: transparent;
             }
-            QScrollArea QScrollBar {
-                width: 0px;
+            QScrollBar:vertical {
+                width: 12px;
+                background: rgba(0, 0, 0, 100);
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255, 255, 255, 150);
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0px;
-                background: transparent;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
         # Widget per la lista degli ingredienti
         ing_widget = QWidget()
+        ing_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         list_layout = QHBoxLayout(ing_widget)
         list_layout.setContentsMargins(5, 5, 5, 5)
         list_layout.setSpacing(0)
         
-        # Creiamo due colonne
-        left_column = QVBoxLayout()
-        right_column = QVBoxLayout()
+        # Creiamo due widget separati per le colonne
+        left_column_widget = QWidget()
+        right_column_widget = QWidget()
+        left_column = QVBoxLayout(left_column_widget)
+        right_column = QVBoxLayout(right_column_widget)
+
+        # Impostiamo le policy di dimensionamento per i widget delle colonne
+        left_column_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        right_column_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        
+        # Configuriamo i layout delle colonne
+        left_column.setSpacing(-1)  # Riduciamo lo spazio tra gli elementi a 0
+        left_column.setContentsMargins(0, 0, 0, 0)  # Rimuoviamo i margini
+        right_column.setSpacing(-1)  # Riduciamo lo spazio tra gli elementi a 0
+        right_column.setContentsMargins(0, 0, 0, 0)  # Rimuoviamo i margini
+        
         
         # Dizionari per tenere traccia dei checkbox
         self.unlocked_checkboxes = {}
@@ -390,16 +417,18 @@ class MainWindow(QMainWindow):
         # Creazione delle righe per ogni ingrediente
         for i, ingr in enumerate(INGREDIENTI_ORDINE_SBLOCCO):
             row_layout = QHBoxLayout()
-            row_layout.setSpacing(0)
+            row_layout.setSpacing(5)
             row_layout.setContentsMargins(0, 0, 0, 0)
             
             ingr_label = QLabel(ingr, self)
             ingr_label.setStyleSheet("""
                 color: white;
                 font-family: Alegreya;
-                font-size: 12px;
+                font-size: 14px;
                 font-weight: bold;
+                padding: 1px;
             """)
+            ingr_label.setFixedHeight(16)
             ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             row_layout.addWidget(ingr_label, stretch=3, alignment=Qt.AlignLeft)
 
@@ -408,10 +437,18 @@ class MainWindow(QMainWindow):
                 QCheckBox {
                     color: white;
                     font-family: Alegreya;
-                    font-size: 12px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
             """)
+            
+            palette = QPalette()
+            palette.setColor(QPalette.Active, QPalette.Highlight, QColor("#90EE90"))  # Verde per checkbox attivi
+            palette.setColor(QPalette.Inactive, QPalette.Highlight, QColor("#90EE90"))  # Verde anche per stato inattivo
+            palette.setColor(QPalette.Disabled, QPalette.Highlight, QColor("#808080"))  # Grigio per disabilitati
+            
+            unlocked_cb.setPalette(palette)
+                        
             if ingr in ALWAYS_AVAILABLE:
                 unlocked_cb.setChecked(True)
                 unlocked_cb.setEnabled(False)
@@ -420,10 +457,10 @@ class MainWindow(QMainWindow):
 
             required_cb = QCheckBox(self)
             required_cb.setStyleSheet("""
-                QCheckBox {
+                    QCheckBox {
                     color: white;
                     font-family: Alegreya;
-                    font-size: 12px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
             """)
@@ -445,13 +482,18 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        list_layout.addLayout(left_column)
+        list_layout.addWidget(left_column_widget)
         list_layout.addSpacing(10)
         list_layout.addWidget(content_separator)
         list_layout.addSpacing(15)
-        list_layout.addLayout(right_column)
-
+        list_layout.addWidget(right_column_widget)
+        
+        # Imposta le dimensioni minime per il widget degli ingredienti
+        ing_widget.setMinimumHeight(len(INGREDIENTI_ORDINE_SBLOCCO) * 16)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setWidget(ing_widget)
+        scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         ingredients_layout.addWidget(scroll_area)
         main_layout.addWidget(ingredients_frame)
 
@@ -460,6 +502,7 @@ class MainWindow(QMainWindow):
 
         # Pannello Virtù
         virtues_frame = QFrame(self)
+        virtues_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         virtues_frame.setFrameShape(QFrame.StyledPanel)
         virtues_frame.setStyleSheet("""
             QFrame {
@@ -491,29 +534,34 @@ class MainWindow(QMainWindow):
         virtues_title.setOutlineColor(QColor("#000000"))
         virtues_title.setOutlineThickness(2)
         virtues_layout.addWidget(virtues_title)
+        virtues_layout.setSpacing(2)
+        virtues_layout.setContentsMargins(5, 5, 5, 5)
         
         # Aggiunta degli slider nel pannello Virtù
         for param in self.parameters:
             param_layout = QVBoxLayout()
-            
+            param_layout.setSpacing(2)
+            param_layout.setContentsMargins(0, 0, 0, 0)
             # Creiamo un widget container per il titolo
             title_container = QWidget()
+            title_container.setFixedHeight(30)
             title_layout = QHBoxLayout(title_container)  # Assegniamo subito il parent
-            title_layout.setSpacing(10)
+            title_layout.setSpacing(5)
             title_layout.setContentsMargins(0, 0, 0, 0)
             
             # Titolo del parametro con OutlinedLabel
             title_label = OutlinedLabel(f" {param.capitalize()}", self)
             title_label.setFont(QFont("Alegreya", 14, QFont.Bold))
-            title_label.setMinimumHeight(30)
+            title_label.setFixedHeight(25)
             title_label.setTextColor(QColor("#FFD700"))
             title_label.setOutlineColor(QColor("#000000"))
             title_label.setOutlineThickness(2)
-            title_layout.addWidget(title_label)
+            title_layout.addWidget(title_label, alignment=Qt.AlignLeft)
             
             title_layout.addStretch()
             
             range_label = QLabel("min 0 - max 10", self)
+            range_label.setFixedHeight(25)
             range_label.setStyleSheet("""
                 color: white;
                 font-family: Alegreya;
@@ -525,14 +573,24 @@ class MainWindow(QMainWindow):
             
             param_layout.addWidget(title_container)
             
+            # Container per lo slider
+            slider_container = QWidget()
+            slider_container.setFixedHeight(45)
+            slider_layout = QVBoxLayout(slider_container)
+            slider_layout.setContentsMargins(0, 0, 0, 0)
+            slider_layout.setSpacing(0)
+            
             slider = SquareSlider(0, 10, self)
+            slider.setMinimumHeight(40)
             slider.valueChanged.connect(lambda low, high, p=param: self.updateParameterLabel(p, low, high))
-            param_layout.addWidget(slider)
             self.sliders[param] = slider
             
+            param_layout.addWidget(slider)
             virtues_layout.addLayout(param_layout)
+        
         # Pannello Risultati
         results_frame = QFrame(self)
+        results_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         results_frame.setFrameShape(QFrame.StyledPanel)
         results_frame.setStyleSheet("""
             QFrame {
@@ -555,35 +613,27 @@ class MainWindow(QMainWindow):
         self.compute_button.setIcon(icon)
         self.compute_button.setStyleSheet("""
             QPushButton {
-            font-size: 20px;
-            font-family: Alegreya;
-            padding: 8px;
-            background-color: rgba(30, 30, 30, 180);
-            color: #FFD700;  /* Colore oro */
-            border-radius: 10px;
-            font-weight: bold;
-            border: 3px solid black;  /* Bordo nero per l'outline */
-            text-shadow: -3px -3px 0 #000,  
-                        3px -3px 0 #000,
-                       -3px  3px 0 #000,
-                        3px  3px 0 #000,
-                       -3px  0   0 #000,
-                        3px  0   0 #000,
-                        0   -3px 0 #000,
-                        0    3px 0 #000;  /* Crea l'effetto outline */
-          }
-          QPushButton:hover {
+                font-size: 20px;
+                font-family: Alegreya;
+                padding: 8px;
+                background-color: rgba(30, 30, 30, 180);
+                color: #FFD700;  /* Colore oro */
+                border-radius: 10px;
+                font-weight: bold;
+                border: 3px solid black;  /* Bordo nero per l'outline */
+            }
+            QPushButton:hover {
               background-color: rgba(50, 50, 50, 200);
-          }
-          QPushButton:pressed {
-              background-color: rgba(20, 20, 20, 200);
-              padding-top: 10px;
-          }
-          QPushButton:disabled {
-              background-color: rgba(30, 30, 30, 100);
-              color: rgba(255, 215, 0, 128);  /* Oro semi-trasparente quando disabilitato */
-          }
-""")
+            }
+            QPushButton:pressed {
+                background-color: rgba(20, 20, 20, 200);
+                padding-top: 10px;
+            }
+            QPushButton:disabled {
+                background-color: rgba(30, 30, 30, 100);
+                color: rgba(255, 215, 0, 128);  /* Oro semi-trasparente quando disabilitato */
+            }
+        """)
         button_shadow = QGraphicsDropShadowEffect()
         button_shadow.setBlurRadius(15)
         button_shadow.setXOffset(3)
@@ -596,6 +646,7 @@ class MainWindow(QMainWindow):
         # Results text area
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
+        self.result_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.result_text.setStyleSheet("""
             QTextEdit {
                 background-color: rgba(30, 30, 30, 180);
@@ -624,11 +675,14 @@ class MainWindow(QMainWindow):
         
         self.loading_label = QLabel("Ricerca in corso...\nAttendi mentre calcolo la combinazione ottimale...", self)
         self.loading_label.setStyleSheet("""
-            color: white;
-            font-family: Alegreya;
-            font-size: 14px;
-            font-weight: bold;
-            padding: 5px;
+            QLabel {
+                color: white;
+                font-family: Alegreya;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 5px;
+                background-color: transparent;
+            }
         """)
         loading_layout.addWidget(self.loading_label)
         loading_layout.addStretch()
