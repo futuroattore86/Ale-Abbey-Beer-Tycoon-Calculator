@@ -72,10 +72,13 @@ def calculate_score(values, ranges):
         
         if min_value <= current_value <= max_value:
             # Se il valore è nel range, il punteggio aumenta proporzionalmente al valore
-            score += current_value
+            score += current_value * 10  # Base score
+            # Bonus per vicinanza al massimo
+            normalized_value = (current_value - min_value) / (max_value - min_value)
+            score += normalized_value * 100
         else:
             # Se il valore è fuori range, penalizza fortemente
-            score -= 1000
+            score -= 10000
     
     return score
 def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients):
@@ -86,7 +89,7 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
     start_time = time()
     
     print("\nDEBUG INFO:")
-    print(f"Ingredienti richiesti: {[ingredienti[i] for i in required_ingredients]}")
+    print(f"Ingredienti richiesti (almeno 1 unità): {[ingredienti[i] for i in required_ingredients]}")
     print(f"Ingredienti sbloccati ricevuti: {[ingredienti[i] for i in unlocked_ingredients]}")
     
     stats = {
@@ -105,26 +108,28 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
         'schiuma': [ranges['schiuma'][0], ranges['schiuma'][1]]
     }
     
-    # Aggiungi gli indici degli ingredienti sempre disponibili
+    # Debug per gli indici utilizzabili
     always_available_indices = [ingredienti.index(ingr) for ingr in ALWAYS_AVAILABLE]
+    print("\nDEBUG - Indici e ingredienti:")
+    print("Ingredienti sempre disponibili:", [ingredienti[i] for i in always_available_indices])
+    print("Ingredienti sbloccati:", [ingredienti[i] for i in unlocked_ingredients])
+    
+    # Unisci gli ingredienti sbloccati con quelli sempre disponibili
     unlocked_set = set(unlocked_ingredients)
     unlocked_set.update(always_available_indices)
     usable_indices = sorted(list(unlocked_set))
+    print("Tutti gli ingredienti utilizzabili:", [ingredienti[i] for i in usable_indices])
     
-    # Prepara la base con gli ingredienti obbligatori
-    base_quantities = [0] * len(ingredienti)
-    for req_idx in required_ingredients:
-        base_quantities[req_idx] = 1
+    # Ora tutti gli ingredienti utilizzabili sono variabili
+    variable_indices = usable_indices
+    print(f"\nIngredienti variabili totali: {len(variable_indices)}")
+    print([ingredienti[i] for i in variable_indices])
     
-    # Calcola i valori base una sola volta
-    base_values = calculate_base_values(base_quantities)
-    
-    # Prepara gli ingredienti variabili
-    variable_indices = [idx for idx in usable_indices if idx not in required_ingredients]
-    total_theoretical_combinations = 10**len(variable_indices)  # range 0-9
-    
-    print(f"\nGenerazione combinazioni per {len(variable_indices)} ingredienti variabili")
-    print(f"Combinazioni possibili teoriche: {total_theoretical_combinations:,}")
+    total_theoretical_combinations = 10**len(variable_indices)
+    print(f"\nGenerazione combinazioni:")
+    print(f"- Numero ingredienti variabili: {len(variable_indices)}")
+    print(f"- Range per ogni ingrediente: 0-9")
+    print(f"- Combinazioni teoriche totali: {total_theoretical_combinations:,}")
     
     best_quantities = None
     best_values = None
@@ -132,16 +137,18 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
     range_search = range(10)  # 0-9 unità
     
     def is_in_range(values):
-        """Verifica se i valori sono nei range consentiti"""
-        return (adjusted_ranges['gusto'][0] <= values['gusto'] <= adjusted_ranges['gusto'][1] and 
-                adjusted_ranges['colore'][0] <= values['colore'] <= adjusted_ranges['colore'][1] and 
-                adjusted_ranges['gradazione'][0] <= values['gradazione'] <= adjusted_ranges['gradazione'][1] and 
-                adjusted_ranges['schiuma'][0] <= values['schiuma'] <= adjusted_ranges['schiuma'][1])
+        """Verifica se i valori sono nei range consentiti con una piccola tolleranza"""
+        tolerance = 0.1
+        return (adjusted_ranges['gusto'][0] - tolerance <= values['gusto'] <= adjusted_ranges['gusto'][1] + tolerance and 
+                adjusted_ranges['colore'][0] - tolerance <= values['colore'] <= adjusted_ranges['colore'][1] + tolerance and 
+                adjusted_ranges['gradazione'][0] - tolerance <= values['gradazione'] <= adjusted_ranges['gradazione'][1] + tolerance and 
+                adjusted_ranges['schiuma'][0] - tolerance <= values['schiuma'] <= adjusted_ranges['schiuma'][1] + tolerance)
+    
+    def has_required_ingredients(quantities):
+        """Verifica che tutti gli ingredienti richiesti abbiano almeno 1 unità"""
+        return all(quantities[idx] >= 1 for idx in required_ingredients)
 
     def generate_combinations(partial, current_sum, position, current_values):
-        """
-        Genera combinazioni in modo ricorsivo con early termination e calcolo incrementale
-        """
         nonlocal best_score, best_quantities, best_values
         
         if current_sum > 25:
@@ -150,6 +157,16 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
             
         if position == len(variable_indices):
             stats["examined_combinations"] += 1
+            
+            # Crea l'array completo delle quantità
+            quantities = [0] * len(ingredienti)
+            for idx, qty in zip(variable_indices, partial):
+                quantities[idx] = qty
+            
+            # Verifica che gli ingredienti richiesti siano presenti
+            if not has_required_ingredients(quantities):
+                stats["skipped_required"] += 1
+                return
             
             if not is_in_range(current_values):
                 stats["skipped_range"] += 1
@@ -160,9 +177,6 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
             
             if score > best_score:
                 best_score = score
-                quantities = base_quantities.copy()
-                for idx, qty in zip(variable_indices, partial):
-                    quantities[idx] = qty
                 best_quantities = quantities
                 best_values = current_values.copy()
                 
@@ -192,8 +206,16 @@ def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients)
                 new_values
             )
 
-    # Avvia la generazione ricorsiva con i valori base
-    generate_combinations([], sum(base_quantities), 0, base_values)
+    # Inizializza i valori base con un array vuoto
+    initial_values = {
+        'gusto': 0,
+        'colore': 0,
+        'gradazione': 0,
+        'schiuma': 0
+    }
+    
+    # Avvia la generazione ricorsiva partendo da zero
+    generate_combinations([], 0, 0, initial_values)
     
     end_time = time()
     stats.update({
