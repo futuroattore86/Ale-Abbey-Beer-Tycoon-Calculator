@@ -293,41 +293,38 @@ class MainWindow(QMainWindow):
         ingredients_frame.setGraphicsEffect(ingredients_shadow)
 
         ingredients_layout = QVBoxLayout(ingredients_frame)
-        ingredients_label = QLabel("Lista Ingredienti", self)
-        ingredients_label.setAlignment(Qt.AlignLeft)
-        ingredients_label.setStyleSheet("""
-            color: white;
-            font-family: Alegreya;
-            font-size: 14px;
-            font-weight: bold;
-            padding: 2px;
-        """)
+        ingredients_label = OutlinedLabel(" Lista Ingredienti", self)
+        ingredients_label.setFont(QFont("Alegreya", 18, QFont.Bold))
+        ingredients_label.setMinimumHeight(60)
+        ingredients_label.setTextColor(QColor("#FFD700"))
+        ingredients_label.setOutlineColor(QColor("#000000"))
+        ingredients_label.setOutlineThickness(3)
         ingredients_layout.addWidget(ingredients_label)
+        ingredients_layout.setSpacing(3)
+        ingredients_layout.setContentsMargins(10, 10, 10, 0)
 
         # Header delle colonne
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(5, 5, 5, 5)
+        header_layout.setContentsMargins(5, 0, 5, 5)
         header_layout.setSpacing(0)
         
         # Header colonna sinistra
         left_header = QHBoxLayout()
         left_header.setContentsMargins(0, 0, 0, 0)
         left_header.setSpacing(0)
-        left_ingr_label = QLabel("Ingrediente", self)
-        left_ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        left_header.addWidget(left_ingr_label, stretch=3, alignment=Qt.AlignLeft)
-        left_header.addWidget(QLabel("Sbloccato", self), stretch=1)
-        left_header.addWidget(QLabel("Obbligatorio", self), stretch=1)
+        
+        left_header.addStretch(3)
+        left_header.addWidget(QLabel("Sbloccato", self), stretch=1, alignment=Qt.AlignCenter)
+        left_header.addWidget(QLabel("Obbligatorio", self), stretch=1, alignment=Qt.AlignCenter)
         
         # Header colonna destra
         right_header = QHBoxLayout()
         right_header.setContentsMargins(0, 0, 0, 0)
         right_header.setSpacing(0)
-        right_ingr_label = QLabel("Ingrediente", self)
-        right_ingr_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        right_header.addWidget(right_ingr_label, stretch=3, alignment=Qt.AlignLeft)
-        right_header.addWidget(QLabel("Sbloccato", self), stretch=1)
-        right_header.addWidget(QLabel("Obbligatorio", self), stretch=1)
+        
+        right_header.addStretch(3)
+        right_header.addWidget(QLabel("Sbloccato", self), stretch=1, alignment=Qt.AlignCenter)
+        right_header.addWidget(QLabel("Obbligatorio", self), stretch=1, alignment=Qt.AlignCenter)
         
         # Aggiunta degli header al layout principale
         header_separator = QFrame()
@@ -348,7 +345,7 @@ class MainWindow(QMainWindow):
         
         # Stile per le label degli header
         for label in self.findChildren(QLabel):
-            if label.parent() == self and label.text() in ["Ingrediente", "Sbloccato", "Obbligatorio"]:
+            if label.parent() == self and label.text() in ["Sbloccato", "Obbligatorio"]:
                 label.setStyleSheet("""
                     color: white;
                     font-family: Alegreya;
@@ -558,22 +555,35 @@ class MainWindow(QMainWindow):
         self.compute_button.setIcon(icon)
         self.compute_button.setStyleSheet("""
             QPushButton {
-                font-size: 18px;
-                font-family: Alegreya;
-                padding: 8px;
-                background-color: rgba(30, 30, 30, 180);
-                color: white;
-                border-radius: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(50, 50, 50, 200);
-            }
-            QPushButton:disabled {
-                background-color: rgba(30, 30, 30, 100);
-                color: rgba(255, 255, 255, 128);
-            }
-        """)
+            font-size: 20px;
+            font-family: Alegreya;
+            padding: 8px;
+            background-color: rgba(30, 30, 30, 180);
+            color: #FFD700;  /* Colore oro */
+            border-radius: 10px;
+            font-weight: bold;
+            border: 3px solid black;  /* Bordo nero per l'outline */
+            text-shadow: -3px -3px 0 #000,  
+                        3px -3px 0 #000,
+                       -3px  3px 0 #000,
+                        3px  3px 0 #000,
+                       -3px  0   0 #000,
+                        3px  0   0 #000,
+                        0   -3px 0 #000,
+                        0    3px 0 #000;  /* Crea l'effetto outline */
+          }
+          QPushButton:hover {
+              background-color: rgba(50, 50, 50, 200);
+          }
+          QPushButton:pressed {
+              background-color: rgba(20, 20, 20, 200);
+              padding-top: 10px;
+          }
+          QPushButton:disabled {
+              background-color: rgba(30, 30, 30, 100);
+              color: rgba(255, 215, 0, 128);  /* Oro semi-trasparente quando disabilitato */
+          }
+""")
         button_shadow = QGraphicsDropShadowEffect()
         button_shadow.setBlurRadius(15)
         button_shadow.setXOffset(3)
