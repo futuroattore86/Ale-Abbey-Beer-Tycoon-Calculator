@@ -1,4 +1,16 @@
-# Coefficients for each ingredient
+#!/usr/bin/env python3
+"""
+Calculator per trovare la combinazione ottimale di ingredienti (fino ad un totale di 25 unità)
+in base ai parametri "gusto", "colore", "gradazione" e "schiuma", con penalità in caso di valori fuori
+dei range previsti.
+Lo spazio delle combinazioni viene "appiattito" e diviso in modo equo tra 8 worker.
+Questo file viene consultato dall'interfaccia grafica per gestire i parametri richiesti di calcolo.
+"""
+
+# Limite massimo di unità per ciascun ingrediente
+MAX_QUANTITY = 5
+
+# Coefficienti per ogni ingrediente
 coefficients = {
     'gusto': [0.4, 0.8, 1.6, 0.8, 2.0, 1.0, 2.5, -1.0, 0.5, 1.0, 2.0,
               1.5, 1.5, 0.5, -0.5, 1.5, 0.3, 1.5, 0.8, 1.2, 1.6,
@@ -14,7 +26,7 @@ coefficients = {
                 -0.5, 0.0, 0.0, -1.0, -1.0, 0.0, 1.5, 0.0, 0.0, 2.0]
 }
 
-# Full list of ingredients
+# Lista completa degli ingredienti
 ingredienti = [
     'Malto Chiaro', 'Malto Ambrato', 'Malto Marrone', 'Malto di Frumento',
     'Malto di Segale', 'Malto Tostato', 'Malto Affumicato', 'Zucchero',
@@ -26,7 +38,7 @@ ingredienti = [
     'Fiocchi di Frumento'
 ]
 
-# Order of unlocking ingredients in the game
+# Ordine in cui vengono sbloccati gli ingredienti nel gioco
 INGREDIENTI_ORDINE_SBLOCCO = [
     'Malto Chiaro', 'Lievito Standard', 'Gruit', 'Malto Marrone',
     'Malto Ambrato', 'Luppolo Classico', 'Miele', 'Eucalipto', 'Lievito Forte',
@@ -38,48 +50,50 @@ INGREDIENTI_ORDINE_SBLOCCO = [
     'Nutrienti per Lievito', 'Malto Affumicato'
 ]
 
-# Always available ingredients and the unlockable ones.
+# Ingredienti sempre disponibili e sbloccabili
 ALWAYS_AVAILABLE = ['Malto Chiaro', 'Lievito Standard']
 UNLOCKABLE_INGREDIENTS = [ingr for ingr in INGREDIENTI_ORDINE_SBLOCCO if ingr not in ALWAYS_AVAILABLE]
 
-from functools import lru_cache
+def index_to_combination(index, length, base):
+    """
+    Converte un indice (in base 10) in una combinazione 
+    (lista di 'length' cifre) usando base = MAX_QUANTITY + 1.
+    Ogni cifra rappresenta la quantità per l'ingrediente corrispondente.
+    """
+    combo = [0] * length
+    for pos in range(length - 1, -1, -1):
+        combo[pos] = index % base
+        index //= base
+    return combo
 
-@lru_cache(maxsize=1024)
-def calculate_values_incremental(base_values_tuple, ingredient_idx, quantity_delta):
+def calculate_values(quantities):
     """
-    Incrementally calculates new virtual values (gusto, colore, gradazione, schiuma).
-    base_values_tuple is a tuple (gusto, colore, gradazione, schiuma).
+    Calcola i valori virtuali (gusto, colore, gradazione, schiuma) 
+    come somma di quantità * coefficienti.
     """
-    return (
-        base_values_tuple[0] + quantity_delta * coefficients['gusto'][ingredient_idx],
-        base_values_tuple[1] + quantity_delta * coefficients['colore'][ingredient_idx],
-        base_values_tuple[2] + quantity_delta * coefficients['gradazione'][ingredient_idx],
-        base_values_tuple[3] + quantity_delta * coefficients['schiuma'][ingredient_idx]
-    )
-
-def calculate_base_values(base_quantities):
-    """
-    Calculates the initial virtual values from the provided quantities.
-    """
-    return {
-        'gusto': sum(q * c for q, c in zip(base_quantities, coefficients['gusto'])),
-        'colore': sum(q * c for q, c in zip(base_quantities, coefficients['colore'])),
-        'gradazione': sum(q * c for q, c in zip(base_quantities, coefficients['gradazione'])),
-        'schiuma': sum(q * c for q, c in zip(base_quantities, coefficients['schiuma']))
-    }
+    values = {'gusto': 0, 'colore': 0, 'gradazione': 0, 'schiuma': 0}
+    for i, qty in enumerate(quantities):
+        values['gusto']      += qty * coefficients['gusto'][i]
+        values['colore']     += qty * coefficients['colore'][i]
+        values['gradazione'] += qty * coefficients['gradazione'][i]
+        values['schiuma']    += qty * coefficients['schiuma'][i]
+    return values
 
 def calculate_score(values, ranges):
     """
-    Calculates a score based on the closeness of virtual values to the desired ranges.
-    A small tolerance is applied (0.05) for borderline values.
-    Adjust the base multiplier (10) and bonus multiplier (100) as needed.
+    Calcola lo score basandosi sulla vicinanza dei valori ai range desiderati
+    e applica una tolleranza di 0.05. 
+    Modifica il controllo dell'upper bound per permettere, ad esempio, che 
+    un range 1-3 includa valori fino a 3.99 (ossia, < 4.0).
+    Valori fuori dal range sono penalizzati di -10000.
     """
     tolerance = 0.05
     score = 0
     for param in ['gusto', 'colore', 'gradazione', 'schiuma']:
         low, high = ranges[param]
         current = values[param]
-        if (low - tolerance) <= current <= (high + tolerance):
+        # Modifica: consenti valori < (high + 1.0) anziché <= high
+        if (low - tolerance) <= current < (high + 1.0):
             score += current * 10
             normalized = (current - low) / (high - low) if (high - low) != 0 else 1
             score += normalized * 100
@@ -87,202 +101,210 @@ def calculate_score(values, ranges):
             score -= 10000
     return score
 
-def get_ingredient_index(ingredient_name):
+def meets_required(quantities, required_indices):
     """
-    Returns the index of an ingredient given its name.
+    Ritorna True se, per tutti gli indici in required_indices,
+    la quantità corrispondente è almeno 1.
     """
-    try:
-        return ingredienti.index(ingredient_name)
-    except ValueError:
-        return -1
+    return all(quantities[i] >= 1 for i in required_indices)
+
+def normalize_ranges(ranges):
+    """
+    Normalizza 'ranges' in un dizionario con chiavi 'gusto', 'colore', 'gradazione', 'schiuma'.
+    Se 'ranges' è già un dizionario, lo restituisce invariato.
+    Se è una lista o tuple, si assume l'ordine indicato.
+    """
+    if isinstance(ranges, dict):
+        return ranges
+    elif isinstance(ranges, (tuple, list)):
+        keys = ['gusto', 'colore', 'gradazione', 'schiuma']
+        if len(ranges) < len(keys):
+            raise ValueError("Non sono stati forniti abbastanza valori per i range.")
+        return {keys[i]: ranges[i] for i in range(len(keys))}
+    else:
+        raise ValueError("Tipo non valido per il parametro ranges.")
 
 def worker_process(params):
     """
-    Worker routine for parallel search.
-    Each worker explores a slice of the search space based on the units for the first ingredient.
+    Worker che elabora un intervallo dello spazio "appiattito" delle combinazioni.
+    Per ogni indice, converte l'indice in una combinazione per gli ingredienti sbloccati,
+    applica i vincoli sul totale (<= 25), sugli ingredienti richiesti e sui range dei valori.
     """
-    variable_indices = params['variable_indices']
-    ranges = params['ranges']
-    required_ingredients = params['required_ingredients']
-    worker_id = params['worker_id']
-    num_workers = params['num_workers']
-    
-    local_results = {
-        "best_score": -float('inf'),
-        "best_quantities": None,
-        "best_values": None,
-        "stats": {
-            "examined_combinations": 0,
-            "skipped_total": 0,
-            "skipped_required": 0,
-            "skipped_range": 0,
-            "valid_combinations": 0
-        }
-    }
-    
-    def has_required_ingredients(quantities):
-        return all(quantities[idx] >= 1 for idx in required_ingredients)
-    
-    # Define the subrange for the first ingredient (0-9) for this worker.
-    start_value = (worker_id * 10) // num_workers
-    end_value = ((worker_id + 1) * 10) // num_workers
-    
-    def generate_combinations(partial, current_sum, position, current_values_tuple):
-        if current_sum > 25:
-            local_results["stats"]["skipped_total"] += 1
-            return
-            
-        if position == len(variable_indices):
-            local_results["stats"]["examined_combinations"] += 1
-            quantities = [0] * len(ingredienti)
-            for idx, qty in zip(variable_indices, partial):
-                quantities[idx] = qty
-            if not has_required_ingredients(quantities):
-                local_results["stats"]["skipped_required"] += 1
-                return
-            current_vals = {
-                'gusto': current_values_tuple[0],
-                'colore': current_values_tuple[1],
-                'gradazione': current_values_tuple[2],
-                'schiuma': current_values_tuple[3]
-            }
-            in_range = True
-            for param in ['gusto', 'colore', 'gradazione', 'schiuma']:
-                low, high = ranges[param]
-                if not (low <= current_vals[param] <= high):
-                    in_range = False
-                    break
-            if not in_range:
-                local_results["stats"]["skipped_range"] += 1
-                return
-            
-            local_results["stats"]["valid_combinations"] += 1
-            score = calculate_score(current_vals, ranges)
-            if score > local_results["best_score"]:
-                local_results["best_score"] = score
-                local_results["best_quantities"] = quantities.copy()
-                local_results["best_values"] = current_vals.copy()
-                print("\nNuova migliore combinazione trovata (Worker {}):".format(worker_id))
-                for i, qty in enumerate(quantities):
-                    if qty > 0:
-                        print(f"{ingredienti[i]}: {qty}")
-                print("Valori: Gusto={:.2f}, Colore={:.2f}, Gradazione={:.2f}, Schiuma={:.2f}".format(
-                    current_vals['gusto'], current_vals['colore'], current_vals['gradazione'], current_vals['schiuma']))
-                print("Score: {:.2f}".format(score))
-            return
-            
-        if position == 0:
-            value_range = range(start_value, end_value)
-        else:
-            value_range = range(10)
-            
-        for qty in value_range:
-            new_values_tuple = calculate_values_incremental(
-                current_values_tuple,
-                variable_indices[position],
-                qty
-            )
-            generate_combinations(
-                partial + [qty],
-                current_sum + qty,
-                position + 1,
-                new_values_tuple
-            )
-    
-    initial_values = (0, 0, 0, 0)
-    generate_combinations([], 0, 0, initial_values)
-    return local_results
+    start_index   = params["start_index"]
+    end_index     = params["end_index"]
+    variable_indices = params["variable_indices"]   # Indici degli ingredienti sbloccati
+    required_indices = params["required_indices"]       # Indici degli ingredienti obbligatori
+    total_units_constraint = 25
+    ranges = normalize_ranges(params["ranges"])
+    worker_id = params["worker_id"]
 
-from multiprocessing import Pool, cpu_count
-from time import time
+    best_score = -float('inf')
+    best_quantities = None
+    best_values = None
+    stats = {
+        "examined": 0,
+        "skipped_total": 0,
+        "skipped_required": 0,
+        "skipped_range": 0,
+        "valid": 0
+    }
+    base = MAX_QUANTITY + 1
+    total_vars = len(variable_indices)
+
+    for idx in range(start_index, end_index):
+        # Genera una combinazione relativa agli ingredienti sbloccati
+        combo = index_to_combination(idx, total_vars, base)
+        # Inizializza il vettore delle quantità per tutti gli ingredienti a 0
+        quantities = [0] * len(ingredienti)
+        for pos, ingr_idx in enumerate(variable_indices):
+            quantities[ingr_idx] = combo[pos]
+        stats["examined"] += 1
+
+        # Verifica il vincolo del totale unità
+        if sum(quantities) > total_units_constraint:
+            stats["skipped_total"] += 1
+            continue
+
+        # Verifica che siano presenti gli ingredienti obbligatori
+        if not meets_required(quantities, required_indices):
+            stats["skipped_required"] += 1
+            continue
+
+        values = calculate_values(quantities)
+        # Verifica che i valori rientrino nei range specificati
+        valid = True
+        for param in ['gusto', 'colore', 'gradazione', 'schiuma']:
+            low, high = ranges[param]
+            # Modifica: consentire valori < (high + 1.0)
+            if not (low <= values[param] < high + 1.0):
+                valid = False
+                break
+        if not valid:
+            stats["skipped_range"] += 1
+            continue
+
+        stats["valid"] += 1
+        score = calculate_score(values, ranges)
+        if score > best_score:
+            best_score = score
+            best_quantities = quantities.copy()
+            best_values = values.copy()
+            # Stampa di debug del nuovo best trovato (opzionale)
+            print(f"\nNew best combination found (Worker {worker_id}):")
+            for i, qty in enumerate(quantities):
+                if qty > 0:
+                    print(f"{ingredienti[i]}: {qty}")
+            values_str = ", ".join(f"{k.capitalize()}={values[k]:.2f}" for k in values)
+            print(f"Values: {values_str}")
+            print(f"Score: {score:.2f}")
+    
+    return {"best_score": best_score, "best_quantities": best_quantities, "best_values": best_values, "stats": stats}
 
 def find_optimal_combination(required_ingredients, ranges, unlocked_ingredients):
     """
-    Finds the optimal combination that meets:
-     - A total unit limit of 25.
-     - At least one unit for each required ingredient.
-     - Virtual values (gusto, colore, gradazione, schiuma) within the desired ranges.
-    The search is parallelized across multiple processes.
+    Cerca la combinazione ottimale che rispetti:
+      - Totale unità <= 25;
+      - Almeno una unità per ogni ingrediente richiesto;
+      - Valori (gusto, colore, gradazione, schiuma) nei range specificati.
+    Lo spazio delle combinazioni teoriche viene calcolato in base al numero di ingredienti sbloccati,
+    e suddiviso in 8 worker. Vengono stampate le statistiche iniziali (inclusi i range usati)
+    prima di iniziare la ricerca.
     """
-    start_time = time()
+    from multiprocessing import Pool
+    from time import time
+
+    ranges = normalize_ranges(ranges)
+
+    # Debug: stampa dei range usati per il calcolo
+    print("DEBUG: Range in uso:")
+    for param, (low, high) in ranges.items():
+        print(f"  {param.capitalize()}: {low} - {high}  (valori accettati: [{low}, {high + 1.0}))")
+
+    # Combina gli ingredienti sbloccati con quelli sempre disponibili.
+    # Per preservare l'ordine della GUI, usa l'ordine di unlocked_ingredients
+    usable_indices = []
+    for idx in unlocked_ingredients:
+        if idx not in usable_indices:
+            usable_indices.append(idx)
+    for ingr in ALWAYS_AVAILABLE:
+        idx = ingredienti.index(ingr)
+        if idx not in usable_indices:
+            usable_indices.append(idx)
+
+    # Determina gli indici degli ingredienti richiesti.
+    required_indices = []
+    for ing in required_ingredients:
+        if isinstance(ing, int):
+            required_indices.append(ing)
+        else:
+            try:
+                required_indices.append(ingredienti.index(ing))
+            except ValueError:
+                pass
+
+    total_vars = len(usable_indices)
+    base = MAX_QUANTITY + 1
+    total_theoretical = base ** total_vars
+
+    print("=== Statistiche Iniziali ===")
+    print(f"Ingredienti sbloccati totali: {total_vars}")
+    print(f"Ingredienti richiesti: {len(required_indices)}")
+    print(f"Combinazioni teoriche: {total_theoretical:,}")
+    print("============================\n")
     
-    print("\nDEBUG INFO:")
-    print("Ingredienti richiesti (almeno 1 unità):", [ingredienti[i] for i in required_ingredients])
-    print("Ingredienti sbloccati ricevuti:", [ingredienti[i] for i in unlocked_ingredients])
-    
-    always_available_indices = [ingredienti.index(ingr) for ingr in ALWAYS_AVAILABLE]
-    print("\nDEBUG - Indici e ingredienti:")
-    print("Ingredienti sempre disponibili:", [ingredienti[i] for i in always_available_indices])
-    print("Ingredienti sbloccati:", [ingredienti[i] for i in unlocked_ingredients])
-    
-    unlocked_set = set(unlocked_ingredients)
-    unlocked_set.update(always_available_indices)
-    usable_indices = sorted(list(unlocked_set))
-    print("Tutti gli ingredienti utilizzabili:", [ingredienti[i] for i in usable_indices])
-    
-    variable_indices = usable_indices
-    print("\nIngredienti variabili totali:", len(variable_indices))
-    print([ingredienti[i] for i in variable_indices])
-    
-    total_theoretical_combinations = 10 ** len(variable_indices)
-    print("\nGenerazione combinazioni:")
-    print("- Numero ingredienti variabili:", len(variable_indices))
-    print("- Range per ogni ingrediente: 0-9")
-    print(f"- Combinazioni teoriche totali: {total_theoretical_combinations:,}")
-    
-    num_processes = min(cpu_count(), 4)
-    print("\nUtilizzo", num_processes, "processi paralleli")
-    
+    num_workers = 8
+    partition_size = total_theoretical // num_workers
+
     worker_params = []
-    for i in range(num_processes):
+    for i in range(num_workers):
+        start_index = i * partition_size
+        end_index = (i + 1) * partition_size if i != num_workers - 1 else total_theoretical
         params = {
-            'variable_indices': variable_indices,
-            'ranges': ranges,
-            'required_ingredients': required_ingredients,
-            'worker_id': i,
-            'num_workers': num_processes
+            "start_index": start_index,
+            "end_index": end_index,
+            "variable_indices": usable_indices,
+            "required_indices": required_indices,
+            "ranges": ranges,
+            "worker_id": i
         }
         worker_params.append(params)
     
-    shared_results = {
-        "best_score": -float('inf'),
-        "best_quantities": None,
-        "best_values": None,
-        "stats": {
-            "examined_combinations": 0,
-            "skipped_total": 0,
-            "skipped_required": 0,
-            "skipped_range": 0,
-            "valid_combinations": 0
-        }
-    }
-    
-    with Pool(processes=num_processes) as pool:
-        worker_results = pool.map(worker_process, worker_params)
-    
-    for result in worker_results:
-        if result["best_score"] > shared_results["best_score"]:
-            shared_results["best_score"] = result["best_score"]
-            shared_results["best_quantities"] = result["best_quantities"]
-            shared_results["best_values"] = result["best_values"]
-        for key in result["stats"]:
-            shared_results["stats"][key] += result["stats"][key]
-    
+    start_time = time()
+    with Pool(processes=num_workers) as pool:
+        results = pool.map(worker_process, worker_params)
     end_time = time()
-    shared_results["stats"].update({
-        "total_combinations": total_theoretical_combinations,
+
+    best_global_score = -float('inf')
+    best_global_quantities = None
+    best_global_values = None
+    total_stats = {"examined": 0, "skipped_total": 0, "skipped_required": 0, "skipped_range": 0, "valid": 0}
+    
+    for res in results:
+        if res["best_score"] > best_global_score:
+            best_global_score = res["best_score"]
+            best_global_quantities = res["best_quantities"]
+            best_global_values = res["best_values"]
+        for key in total_stats:
+            total_stats[key] += res["stats"][key]
+    
+    # Rinomina le chiavi per rispettare quanto aspettato da main.py
+    total_stats["examined_combinations"] = total_stats.pop("examined")
+    total_stats["valid_combinations"] = total_stats.pop("valid")
+    
+    total_stats.update({
+        "total_combinations": total_theoretical,
         "execution_time": end_time - start_time,
-        "best_score": shared_results["best_score"] if shared_results["best_score"] > -float('inf') else None
+        "best_score": best_global_score if best_global_score > -float('inf') else None
     })
     
-    print("\nStatistiche della ricerca:")
+    print("\nSearch statistics:")
     print("-" * 30)
-    print(f"Combinazioni teoriche: {shared_results['stats']['total_combinations']:,}")
-    print(f"Combinazioni esaminate: {shared_results['stats']['examined_combinations']:,}")
-    print(f"Scartate per limite totale > 25: {shared_results['stats']['skipped_total']:,}")
-    print(f"Scartate per ingredienti obbligatori: {shared_results['stats']['skipped_required']:,}")
-    print(f"Scartate per valori fuori range: {shared_results['stats']['skipped_range']:,}")
-    print(f"Combinazioni valide: {shared_results['stats']['valid_combinations']:,}")
-    print(f"\nTempo di esecuzione: {shared_results['stats']['execution_time']:.2f} secondi")
+    print(f"Total theoretical combinations: {total_theoretical:,}")
+    print(f"Examined combinations: {total_stats['examined_combinations']:,}")
+    print(f"Skipped for total > 25: {total_stats['skipped_total']:,}")
+    print(f"Skipped for missing required ingredients: {total_stats['skipped_required']:,}")
+    print(f"Skipped for values out of range: {total_stats['skipped_range']:,}")
+    print(f"Valid combinations: {total_stats['valid_combinations']:,}")
+    print(f"Execution time: {total_stats['execution_time']:.2f} seconds")
     
-    return shared_results["best_quantities"], shared_results["best_values"], shared_results["stats"]
+    return best_global_quantities, best_global_values, total_stats
